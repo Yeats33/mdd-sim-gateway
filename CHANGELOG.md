@@ -4,6 +4,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- A modem that ModemManager declines to manage no longer costs VoWiFi as well. After three
+  minutes without a claim the bridge drives the serial port directly, so SIM access keeps
+  working; cellular data and flight mode stay unavailable because both need a ModemManager
+  modem. The device now reports that reason and a `direct-serial` VoWiFi backend instead of
+  rendering as an indefinite spinner with an empty error. Re-seating the modem retires the
+  verdict and lets ModemManager be tried again; the bridge holds the port exclusively, so
+  nothing else can hand it back automatically. A container is the common case here — the
+  Quectel QMI path needs a net port, and network interfaces belong to the host namespace.
+
 ### Added
 
 - Added a host-side section to the redacted support bundle. The host orchestrator now publishes
