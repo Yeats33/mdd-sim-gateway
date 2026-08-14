@@ -4,6 +4,18 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Added a host-side section to the redacted support bundle. The host orchestrator now publishes
+  the state only it can see — detected virtualization, whether the ModemManager unit is reported
+  active, the discovered modems and their ttys, VPCD port assignments, live bridge processes and
+  its own recent log — and the bundle carries it as `host-diagnostics-redacted.json`. When a tty
+  stays unclaimed, the bundle also records the ModemManager objects and their port lines, which
+  is exactly what the claim check matches against. A stopped or outdated orchestrator is
+  reported as unavailable rather than omitted, so silence is never mistaken for a healthy host.
+  Modem and SIM faults were previously diagnosable only by asking the operator to run commands
+  by hand.
+
 ## [1.3.5] - 2026-08-13
 
 ### Changed
