@@ -2,6 +2,21 @@
 
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- A shared Flutter control surface now covers the gateway's existing browser capabilities on
+  macOS, iOS, and Android: devices and SIMs, VoWiFi calls, SMS, eSIM profiles, allowance and
+  number keeping, country exits, notifications, system maintenance, and diagnostics. Native
+  clients retain HTTPS certificate confirmation, session cookies, CSRF protection, and the
+  gateway's explicit confirmations for destructive or chargeable actions.
+
+- Long-lived platform branches separate the Apple Silicon host, iOS controller, and Android
+  controller while sharing one typed Dart API client and responsive design system. The Mac
+  branch will supervise the unchanged Linux/Docker telecom engine through a Rust host service
+  instead of attempting to replace its mature IMS, Asterisk, and modem implementation.
+
 ## [1.5.2] - 2026-08-26
 
 ### Fixed
