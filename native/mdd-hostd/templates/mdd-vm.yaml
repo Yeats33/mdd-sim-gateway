@@ -1,0 +1,36 @@
+base: template://ubuntu-24.04
+vmType: vz
+arch: aarch64
+cpus: 4
+memory: 8GiB
+disk: 64GiB
+mountType: virtiofs
+
+mounts:
+  - location: __MDD_SOURCE__
+    mountPoint: /mnt/mdd-source
+    writable: true
+
+portForwards:
+  - guestPort: 8443
+    hostPort: 8443
+    guestIP: 0.0.0.0
+    guestIPMustBeZero: false
+    hostIP: 0.0.0.0
+  - guestPortRange: [8089, 8139]
+    hostPortRange: [8089, 8139]
+    guestIP: 0.0.0.0
+    guestIPMustBeZero: false
+    hostIP: 0.0.0.0
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/sh
+      set -eu
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y ca-certificates curl git
+
+message: |
+  MDD Sim Gateway VM is ready. Manage it from the macOS application.

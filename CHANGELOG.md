@@ -17,6 +17,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   branch will supervise the unchanged Linux/Docker telecom engine through a Rust host service
   instead of attempting to replace its mature IMS, Asterisk, and modem implementation.
 
+- The Apple Silicon branch now provides that Rust host boundary: a loopback-only, bearer-token
+  service creates and supervises a Lima `vz` VM, invokes the existing installer without shell
+  interpolation, exposes only the bounded management/WebRTC ports, and lets the Flutter app
+  install or start the local gateway and display a certificate-bound LAN pairing QR code.
+
+### Fixed
+
+- An operator save could retain the same coarse filesystem modification time as the previous
+  document and leave the orchestrator asleep for the full idle backoff. Input change detection
+  now uses nanosecond timestamps plus file size, so settings and line actions wake it reliably.
+
 ## [1.5.2] - 2026-08-26
 
 ### Fixed

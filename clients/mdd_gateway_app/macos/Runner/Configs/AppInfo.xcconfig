@@ -5,10 +5,13 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = mdd_gateway_app
+PRODUCT_NAME = MDD Sim Gateway
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.yeats33.mdd.mddGatewayApp
+PRODUCT_BUNDLE_IDENTIFIER = com.yeats33.mdd.gateway
+
+// Apple Virtualization.framework-backed Lima requires macOS 13.5 or later.
+MACOSX_DEPLOYMENT_TARGET = 13.5
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.yeats33.mdd. All rights reserved.

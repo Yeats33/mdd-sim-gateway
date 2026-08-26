@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/api/gateway_api.dart';
+import '../../core/host/macos_host_service.dart';
 import '../../core/state/gateway_state.dart';
 import '../../core/widgets/gateway_widgets.dart';
 
@@ -69,6 +72,7 @@ class _SystemPageState extends State<SystemPage>
                 themeMode: widget.themeMode,
                 onTheme: widget.onThemeChanged,
                 onChanged: _replace,
+                onPairing: _showPairing,
               ),
               _WebSettings(value: _settings, onChanged: _replace),
               _VoiceSettings(value: _settings, onChanged: _replace),
@@ -219,6 +223,80 @@ class _SystemPageState extends State<SystemPage>
     }
   }
 
+  Future<void> _showPairing() async {
+    try {
+      final host = MacHostService();
+      await host.ensureRunning();
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      );
+      final lanAddress = interfaces
+          .expand((interface) => interface.addresses)
+          .where(
+            (address) =>
+                !address.isLoopback && address.type == InternetAddressType.IPv4,
+          )
+          .map((address) => address.address)
+          .firstOrNull;
+      final result = await host.pairing(lanHost: lanAddress);
+      var qr = result['qr']?.toString() ?? '';
+      final fingerprint = widget.state.certificateSha256;
+      final parsed = Uri.tryParse(qr);
+      if (parsed != null && fingerprint != null) {
+        qr = parsed
+            .replace(
+              queryParameters: {
+                ...parsed.queryParameters,
+                'fingerprint': fingerprint,
+              },
+            )
+            .toString();
+      }
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('手机局域网配对'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                QrImageView(data: qr, size: 250),
+                const SizedBox(height: 12),
+                Text(result['gateway_url']?.toString() ?? ''),
+                if (fingerprint != null) ...[
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    GatewayApi.displayFingerprint(fingerprint),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                const Text(
+                  '二维码只提供局域网地址和证书指纹；手机仍需管理员登录。',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('完成'),
+            ),
+          ],
+        ),
+      );
+    } on Object catch (error) {
+      if (mounted) _toast(error.toString());
+    }
+  }
+
   void _toast(String message) => ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(message)));
@@ -245,16 +323,33 @@ class _GeneralSettings extends StatelessWidget {
     required this.themeMode,
     required this.onTheme,
     required this.onChanged,
+    required this.onPairing,
   });
   final JsonMap value;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onTheme;
   final ValueChanged<JsonMap> onChanged;
+  final VoidCallback onPairing;
   @override
   Widget build(BuildContext context) {
     final defaults = _nested(value, 'device_defaults');
     return _SettingsList(
       children: [
+        if (Platform.isMacOS) ...[
+          SectionCard(
+            title: '手机局域网配对',
+            subtitle: '二维码包含这台 Mac 的局域网地址和已经核对的证书指纹。',
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: onPairing,
+                icon: const Icon(Icons.qr_code_2_rounded),
+                label: const Text('显示配对二维码'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         SectionCard(
           title: '应用外观',
           child: SegmentedButton<ThemeMode>(

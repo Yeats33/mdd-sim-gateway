@@ -2906,9 +2906,13 @@ class Orchestrator:
                      self.data / "config.yaml", self.reselect_path,
                      self.bridge_restart_request_dir):
             try:
-                stamps.append(path.stat().st_mtime)
+                stat = path.stat()
+                # Nanosecond mtime avoids missing two operator saves within one timestamp tick;
+                # size also catches filesystems that expose only coarse mtimes. The old float
+                # mtime could consume the entire idle backoff after a real settings change.
+                stamps.append((stat.st_mtime_ns, stat.st_size))
             except OSError:
-                stamps.append(0.0)
+                stamps.append((0, 0))
         return tuple(stamps) + self._usb_fingerprint()
 
     @staticmethod

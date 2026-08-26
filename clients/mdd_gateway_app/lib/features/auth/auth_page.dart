@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/api/gateway_api.dart';
+import '../../core/host/macos_host_service.dart';
 import '../../core/state/gateway_state.dart';
 
 class AuthPage extends StatefulWidget {
@@ -19,6 +22,8 @@ class _AuthPageState extends State<AuthPage> {
   final _password = TextEditingController();
   bool _remember = true;
   bool _obscure = true;
+  bool _hostBusy = false;
+  String? _hostMessage;
 
   @override
   void initState() {
@@ -97,6 +102,72 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   List<Widget> _connectionFields(BuildContext context) => [
+    if (Platform.isMacOS) ...[
+      Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Theme.of(
+            context,
+          ).colorScheme.primaryContainer.withValues(alpha: .38),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.desktop_mac_outlined),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '这台 Mac 作为网关主机',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '自动创建 Apple Silicon Linux VM，并在其中安装和管理 Docker 通信引擎。',
+              style: TextStyle(fontSize: 12),
+            ),
+            if (_hostMessage != null) ...[
+              const SizedBox(height: 7),
+              Text(_hostMessage!, style: const TextStyle(fontSize: 12)),
+            ],
+            const SizedBox(height: 11),
+            FilledButton.tonalIcon(
+              onPressed: _hostBusy ? null : _setupMacHost,
+              icon: _hostBusy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_circle_outline_rounded),
+              label: Text(_hostBusy ? '正在准备网关…' : '设置并启动本机网关'),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              '或连接另一台网关',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const Expanded(child: Divider()),
+        ],
+      ),
+      const SizedBox(height: 18),
+    ],
     TextField(
       controller: _endpoint,
       keyboardType: TextInputType.url,
@@ -242,6 +313,43 @@ class _AuthPageState extends State<AuthPage> {
       );
     } on Object {
       // GatewayState exposes the actionable error in the card.
+    }
+  }
+
+  Future<void> _setupMacHost() async {
+    setState(() {
+      _hostBusy = true;
+      _hostMessage = '正在启动本机 Rust 宿主服务…';
+    });
+    try {
+      final host = MacHostService();
+      await host.ensureRunning();
+      var status = await host.status();
+      if (!mounted) return;
+      if (status.vm == 'not_installed') {
+        setState(() => _hostMessage = '正在创建 Linux VM 并安装 Docker 网关；首次运行需要几分钟…');
+        await host.install();
+      } else if (status.vm == 'stopped') {
+        setState(() => _hostMessage = '正在启动 Linux VM…');
+        await host.start();
+      } else if (status.vm == 'broken') {
+        throw const HttpException('Lima VM 状态不可用，请检查安装日志。');
+      }
+      for (var attempt = 0; attempt < 60; attempt++) {
+        status = await host.status();
+        if (status.gatewayReady) break;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+      if (!status.gatewayReady) {
+        throw const HttpException('Linux VM 已启动，但网关控制面尚未就绪。');
+      }
+      _endpoint.text = status.gatewayUrl;
+      setState(() => _hostMessage = '本机网关已就绪，正在核对 HTTPS 证书…');
+      await _connect();
+    } on Object catch (error) {
+      if (mounted) setState(() => _hostMessage = error.toString());
+    } finally {
+      if (mounted) setState(() => _hostBusy = false);
     }
   }
 

@@ -24,6 +24,12 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>扫描 Mac 网关配对二维码。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>发现并管理局域网内的 MDD Sim Gateway。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>通过所选 SIM 的 VoWiFi 线路拨打和接听电话。</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
