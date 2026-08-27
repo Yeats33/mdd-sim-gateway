@@ -65,9 +65,10 @@ the official VPCD framing over Lima port 32512, forwarded on host loopback only.
 The guest builds and registers a separately isolated one-slot `libifdvpcd`, so
 the Mac reader cannot alias modem slots or create duplicate card devices.
 
-v1.0.10 enables Keychain Sharing for Flutter Secure Storage and uses the
-non-data-protection login keychain required by ad-hoc direct distribution. App
-startup now exercises secure storage, so CI catches `errSecMissingEntitlement`.
+v1.0.10 uses the non-data-protection macOS login Keychain required by ad-hoc
+direct distribution. It deliberately omits Team-ID-dependent Keychain Sharing:
+an empty access group passes `codesign` but launchd rejects an ad-hoc App. App
+startup exercises secure storage, so CI catches `errSecMissingEntitlement`.
 For existing VMs, helper protocol 4 copies the current bridge installer into the
 guest and creates a managed SSH loopback forward when the old Lima template has
 no static port 32512 mapping.

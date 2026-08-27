@@ -58,7 +58,14 @@ echo "Bundled mdd-hostd and VM template include the loopback-only Mac PC/SC brid
 case "$GUEST_AGENT" in
   *.gz)
     gzip -t "$GUEST_AGENT"
-    GUEST_AGENT_MAGIC=$(gzip -dc "$GUEST_AGENT" | od -An -tx1 -N4 | tr -d ' \n')
+    GUEST_AGENT_MAGIC=$(python3 - "$GUEST_AGENT" <<'PY'
+import gzip
+import sys
+
+with gzip.open(sys.argv[1], "rb") as stream:
+    print(stream.read(4).hex())
+PY
+)
     ;;
   *)
     GUEST_AGENT_MAGIC=$(od -An -tx1 -N4 "$GUEST_AGENT" | tr -d ' \n')
