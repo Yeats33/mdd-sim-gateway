@@ -21,9 +21,10 @@ for required in "$TEMPLATE" "$LIMACTL"; do
   }
 done
 
-SMOKE_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/mdd-lima-vz-smoke.XXXXXX")
-LIMA_HOME_DIR="$SMOKE_ROOT/lima-home"
-VM_NAME="mdd-vz-runtime-smoke"
+SMOKE_ROOT=$(mktemp -d /tmp/mvz.XXXXXX)
+SMOKE_ROOT=$(CDPATH= cd -- "$SMOKE_ROOT" && pwd -P)
+LIMA_HOME_DIR="$SMOKE_ROOT/l"
+VM_NAME="vz"
 mkdir -p "$LIMA_HOME_DIR"
 
 dump_vm_logs() {
@@ -43,6 +44,14 @@ cleanup() {
   rm -r "$SMOKE_ROOT"
 }
 trap cleanup EXIT HUP INT TERM
+
+# Lima appends a randomized suffix to ssh.sock. Keep the fully resolved path
+# below macOS UNIX_PATH_MAX before doing any image or VM work.
+SOCKET_PROBE="$LIMA_HOME_DIR/$VM_NAME/ssh.sock.1234567890123456"
+if [ "${#SOCKET_PROBE}" -ge 104 ]; then
+  echo "VZ smoke socket path is too long (${#SOCKET_PROBE} bytes): $SOCKET_PROBE" >&2
+  exit 1
+fi
 
 if ! LIMA_HOME="$LIMA_HOME_DIR" "$LIMACTL" create \
   --name "$VM_NAME" "$TEMPLATE"; then
