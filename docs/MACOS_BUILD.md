@@ -46,9 +46,12 @@ upgrade.
 
 v1.0.7 signs the bundled `limactl` with Lima's required network-client,
 network-server, and virtualization entitlements. CI extracts and audits those
-entitlements after signing, then creates, boots, enters, and removes a real
-temporary 2 GiB VZ Linux-aarch64 VM before accepting the DMG. The minimal
-runtime smoke stays separate from validation of the production 8 GiB template.
+entitlements after signing, then attempts to create, boot, enter, and remove a
+temporary 2 GiB VZ Linux-aarch64 VM. A hardware-capable Mac must complete the
+boot; GitHub-hosted macOS may skip only the exact
+`Virtualization is not available on this hardware` gate after VZ initialization.
+The minimal runtime smoke stays separate from validation of the production
+8 GiB template.
 
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.

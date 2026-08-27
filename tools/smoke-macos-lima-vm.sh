@@ -59,6 +59,14 @@ if ! LIMA_HOME="$LIMA_HOME_DIR" "$LIMACTL" create \
   exit 1
 fi
 if ! LIMA_HOME="$LIMA_HOME_DIR" "$LIMACTL" start "$VM_NAME"; then
+  HARDWARE_LOG="$LIMA_HOME_DIR/$VM_NAME/ha.stderr.log"
+  if [ "${MDD_ALLOW_NO_VIRTUALIZATION:-0}" = 1 ] && \
+    [ -f "$HARDWARE_LOG" ] && \
+    grep -Fq 'Virtualization is not available on this hardware.' "$HARDWARE_LOG"; then
+    echo "VZ runtime boot explicitly skipped: this host does not expose virtualization hardware."
+    echo "Bundled limactl entitlements and VZ initialization passed before the hardware gate."
+    exit 0
+  fi
   dump_vm_logs
   exit 1
 fi

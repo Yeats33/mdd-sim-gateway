@@ -109,6 +109,7 @@ jobs:
       - name: Build and ad-hoc sign Mac app
         env:
           MDD_LIMA_BIN: /opt/homebrew/bin/limactl
+          MDD_ALLOW_NO_VIRTUALIZATION: 1
         run: |
           set -eu
           flutter config --no-analytics
