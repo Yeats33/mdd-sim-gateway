@@ -17,6 +17,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   branch will supervise the unchanged Linux/Docker telecom engine through a Rust host service
   instead of attempting to replace its mature IMS, Asterisk, and modem implementation.
 
+- The Android branch now declares its LAN, QR camera, microphone, and audio-routing needs,
+  disables cleartext traffic, and builds only `arm64-v8a`. Release builds require the owner's
+  persistent keystore, verify both the ABI set and APK signature, and never fall back to the
+  debug signing identity.
+
+### Fixed
+
+- An operator save could retain the same coarse filesystem modification time as the previous
+  document and leave the orchestrator asleep for the full idle backoff. Input change detection
+  now uses nanosecond timestamps plus file size, so settings and line actions wake it reliably.
+
 ## [1.5.2] - 2026-08-26
 
 ### Fixed

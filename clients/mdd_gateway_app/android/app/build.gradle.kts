@@ -5,8 +5,8 @@ plugins {
 }
 
 android {
-    namespace = "com.yeats33.mdd.mdd_gateway_app"
-    compileSdk = flutter.compileSdkVersion
+    namespace = "com.yeats33.mdd.gateway"
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -15,21 +15,37 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.yeats33.mdd.mdd_gateway_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.yeats33.mdd.gateway"
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    val keystorePath = providers.environmentVariable("MDD_ANDROID_KEYSTORE").orNull
+    val keystorePassword = providers.environmentVariable("MDD_ANDROID_STORE_PASSWORD").orNull
+    val keyAliasValue = providers.environmentVariable("MDD_ANDROID_KEY_ALIAS").orNull
+    val keyPasswordValue = providers.environmentVariable("MDD_ANDROID_KEY_PASSWORD").orNull
+    signingConfigs {
+        if (listOf(keystorePath, keystorePassword, keyAliasValue, keyPasswordValue).all { !it.isNullOrBlank() }) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

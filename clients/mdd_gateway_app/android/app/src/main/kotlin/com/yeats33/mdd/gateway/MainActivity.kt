@@ -1,4 +1,4 @@
-package com.yeats33.mdd.mdd_gateway_app
+package com.yeats33.mdd.gateway
 
 import io.flutter.embedding.android.FlutterActivity
 
