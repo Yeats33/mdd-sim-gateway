@@ -6,6 +6,10 @@ memory: 8GiB
 disk: 64GiB
 mountType: virtiofs
 
+containerd:
+  system: false
+  user: false
+
 mounts:
   - location: __MDD_SOURCE__
     mountPoint: /mnt/mdd-source

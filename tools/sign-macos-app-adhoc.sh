@@ -3,6 +3,7 @@ set -eu
 
 APP_DIR=${1:-}
 ENTITLEMENTS=${2:-}
+LIMA_ENTITLEMENTS=${3:-}
 
 fail() {
   echo "macOS ad-hoc signing: $*" >&2
@@ -18,7 +19,15 @@ fi
 if [ -z "$ENTITLEMENTS" ] || [ ! -f "$ENTITLEMENTS" ]; then
   fail "entitlements file not found: ${ENTITLEMENTS:-<missing>}"
 fi
+if [ -z "$LIMA_ENTITLEMENTS" ] || [ ! -f "$LIMA_ENTITLEMENTS" ]; then
+  fail "Lima VZ entitlements file not found: ${LIMA_ENTITLEMENTS:-<missing>}"
+fi
 command -v python3 >/dev/null 2>&1 || fail "python3 is required to audit entitlements"
+
+LIMACTL="$APP_DIR/Contents/Resources/lima/bin/limactl"
+if [ ! -x "$LIMACTL" ]; then
+  fail "bundled limactl not found: $LIMACTL"
+fi
 
 is_mach_o() {
   /usr/bin/file -b "$1" 2>/dev/null | grep -q 'Mach-O'
@@ -27,7 +36,12 @@ is_mach_o() {
 sign_mach_o_files() {
   find "$APP_DIR/Contents" -type f -print | while IFS= read -r candidate; do
     if is_mach_o "$candidate"; then
-      codesign --force --timestamp=none --sign - "$candidate"
+      if [ "$candidate" = "$LIMACTL" ]; then
+        codesign --force --timestamp=none --sign - \
+          --entitlements "$LIMA_ENTITLEMENTS" "$candidate"
+      else
+        codesign --force --timestamp=none --sign - "$candidate"
+      fi
     fi
   done
 }
@@ -82,6 +96,28 @@ print("true" if entitlements.get("com.apple.security.cs.disable-library-validati
   printf '%s\n' "$entitlements_xml"
 }
 
+assert_lima_vz_entitlements() {
+  if ! entitlements_xml=$(codesign --display --entitlements - --xml "$LIMACTL" 2>/dev/null); then
+    fail "cannot extract bundled limactl entitlements"
+  fi
+  if ! missing=$(printf '%s' "$entitlements_xml" | python3 -c '
+import plistlib
+import sys
+
+entitlements = plistlib.loads(sys.stdin.buffer.read())
+required = (
+    "com.apple.security.network.client",
+    "com.apple.security.network.server",
+    "com.apple.security.virtualization",
+)
+print(",".join(key for key in required if entitlements.get(key) is not True))
+'); then
+    fail "cannot parse bundled limactl entitlements"
+  fi
+  [ -z "$missing" ] || fail "bundled limactl is missing entitlements: $missing"
+  printf '%s\n' "$entitlements_xml"
+}
+
 audit_mach_o_files() {
   find "$APP_DIR/Contents" -type f -print | while IFS= read -r candidate; do
     if is_mach_o "$candidate"; then
@@ -109,6 +145,8 @@ audit_mach_o_files
 audit_nested_bundles
 assert_adhoc "$APP_DIR"
 assert_library_validation_exception
+assert_lima_vz_entitlements
 
 echo "All macOS executable code is ad-hoc signed with no Team ID."
 echo "The final app signature contains the library-validation exception."
+echo "The bundled limactl signature contains the required VZ entitlements."

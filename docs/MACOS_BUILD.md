@@ -44,6 +44,12 @@ The previous `Contents/Resources/limactl` entry point remains as an internal
 compatibility link so an already-running v1.0.5 helper survives an in-place App
 upgrade.
 
+v1.0.7 signs the bundled `limactl` with Lima's required network-client,
+network-server, and virtualization entitlements. CI extracts and audits those
+entitlements after signing, then creates, boots, enters, and removes a real
+temporary 2 GiB VZ Linux-aarch64 VM before accepting the DMG. The minimal
+runtime smoke stays separate from validation of the production 8 GiB template.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 

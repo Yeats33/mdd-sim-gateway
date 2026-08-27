@@ -86,6 +86,13 @@ if grep -Eq '__MDD_BASE__|template:(//)?ubuntu-24\.04' "$RESOURCES/mdd-vm.yaml";
 fi
 chmod 0644 "$RESOURCES/mdd-vm.yaml"
 
+"$LIMACTL_BIN" template copy --embed-all "$HOSTD_DIR/templates/mdd-vz-smoke.yaml" > "$RESOURCES/mdd-vz-smoke.yaml"
+if grep -Eq '__MDD_|template:(//)?ubuntu-24\.04' "$RESOURCES/mdd-vz-smoke.yaml"; then
+  echo "expanded VZ smoke template still contains a runtime template dependency" >&2
+  exit 1
+fi
+chmod 0644 "$RESOURCES/mdd-vz-smoke.yaml"
+
 for item in control engine host patches tools webui install.sh update-policy.json VERSION; do
   if [ -d "$REPO_DIR/$item" ]; then
     rsync -a --delete --exclude node_modules --exclude dist "$REPO_DIR/$item/" "$SOURCE/$item/"
