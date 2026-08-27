@@ -73,7 +73,9 @@ install -m 0755 "$LIMACTL_BIN" "$BUNDLED_LIMACTL"
 install -m 0644 "$LIMA_GUEST_AGENT" "$BUNDLED_LIMA_SHARE/$(basename -- "$LIMA_GUEST_AGENT")"
 ln -sfn "lima/bin/limactl" "$RESOURCES/limactl"
 ln -sfn "../Resources/lima/share/lima" "$COMPAT_LIMA_SHARE/lima"
-"$BUNDLED_LIMACTL" template copy --embed-all "$HOSTD_DIR/templates/mdd-vm.yaml" > "$RESOURCES/mdd-vm.yaml"
+# Expand while the source installation still has its complete template catalog.
+# The relocated bundle intentionally carries only runtime files needed by the App.
+"$LIMACTL_BIN" template copy --embed-all "$HOSTD_DIR/templates/mdd-vm.yaml" > "$RESOURCES/mdd-vm.yaml"
 if ! grep -Fq '__MDD_SOURCE__' "$RESOURCES/mdd-vm.yaml"; then
   echo "expanded Lima template lost the runtime source mount placeholder" >&2
   exit 1
