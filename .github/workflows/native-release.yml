@@ -20,33 +20,36 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify tag and Android signing secrets
         env:
-          KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          PRIVATE_KEY: ${{ secrets.ANDROID_RELEASE_PRIVATE_KEY_BASE64 }}
+          CERTIFICATE: ${{ secrets.ANDROID_RELEASE_CERTIFICATE_BASE64 }}
           KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           set -eu
           test "$GITHUB_REF_NAME" = "v$APP_VERSION"
-          test -n "$KEYSTORE"
-          test -n "$STORE_PASSWORD"
-          test -n "$KEY_ALIAS"
+          test -n "$PRIVATE_KEY"
+          test -n "$CERTIFICATE"
           test -n "$KEY_PASSWORD"
       - name: Install pinned Flutter SDK
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           printf '%s\n' "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-      - name: Restore Android signing key
+      - name: Restore Android signing key and certificate
         env:
-          KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          PRIVATE_KEY: ${{ secrets.ANDROID_RELEASE_PRIVATE_KEY_BASE64 }}
+          CERTIFICATE: ${{ secrets.ANDROID_RELEASE_CERTIFICATE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
-          printf '%s' "$KEYSTORE" | openssl base64 -d -A -out "$RUNNER_TEMP/android-release.p12"
-          chmod 0600 "$RUNNER_TEMP/android-release.p12"
+          printf '%s' "$PRIVATE_KEY" | openssl base64 -d -A -out "$RUNNER_TEMP/android-release-private-key.pk8"
+          printf '%s' "$CERTIFICATE" | openssl base64 -d -A -out "$RUNNER_TEMP/android-release-certificate.pem"
+          printf '%s\n' "$KEY_PASSWORD" > "$RUNNER_TEMP/android-release-key-password"
+          chmod 0600 "$RUNNER_TEMP/android-release-private-key.pk8" \
+            "$RUNNER_TEMP/android-release-certificate.pem" \
+            "$RUNNER_TEMP/android-release-key-password"
       - name: Build and verify signed APK
         env:
-          MDD_ANDROID_KEYSTORE: ${{ runner.temp }}/android-release.p12
-          MDD_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
-          MDD_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-          MDD_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          MDD_ANDROID_PRIVATE_KEY: ${{ runner.temp }}/android-release-private-key.pk8
+          MDD_ANDROID_CERTIFICATE: ${{ runner.temp }}/android-release-certificate.pem
+          MDD_ANDROID_KEY_PASSWORD_FILE: ${{ runner.temp }}/android-release-key-password
         run: ./tools/build-android-apk.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

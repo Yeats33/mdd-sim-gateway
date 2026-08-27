@@ -22,24 +22,8 @@ android {
         versionName = flutter.versionName
     }
 
-    val keystorePath = providers.environmentVariable("MDD_ANDROID_KEYSTORE").orNull
-    val keystorePassword = providers.environmentVariable("MDD_ANDROID_STORE_PASSWORD").orNull
-    val keyAliasValue = providers.environmentVariable("MDD_ANDROID_KEY_ALIAS").orNull
-    val keyPasswordValue = providers.environmentVariable("MDD_ANDROID_KEY_PASSWORD").orNull
-    signingConfigs {
-        if (listOf(keystorePath, keystorePassword, keyAliasValue, keyPasswordValue).all { !it.isNullOrBlank() }) {
-            create("release") {
-                storeFile = file(keystorePath!!)
-                storePassword = keystorePassword
-                keyAlias = keyAliasValue
-                keyPassword = keyPasswordValue
-            }
-        }
-    }
-
     buildTypes {
         release {
-            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
