@@ -2,6 +2,8 @@ name: Native Apps Release
 
 on:
   push:
+    branches:
+      - 'release/v1.0.0'
     tags:
       - 'v1.0.0'
   workflow_dispatch:
@@ -26,7 +28,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           set -eu
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF_NAME" = "v$APP_VERSION"
+          test "$GITHUB_REF_TYPE" != tag || test "$GITHUB_REF_NAME" = "v$APP_VERSION"
           test -n "$PRIVATE_KEY"
           test -n "$CERTIFICATE"
           test -n "$KEY_PASSWORD"
@@ -66,7 +68,7 @@ jobs:
       - name: Verify tag and Apple Silicon builder
         run: |
           set -eu
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF_NAME" = "v$APP_VERSION"
+          test "$GITHUB_REF_TYPE" != tag || test "$GITHUB_REF_NAME" = "v$APP_VERSION"
           test "$(uname -m)" = arm64
       - name: Install pinned Flutter SDK
         run: |
@@ -90,7 +92,7 @@ jobs:
       - name: Verify tag and Apple Silicon builder
         run: |
           set -eu
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF_NAME" = "v$APP_VERSION"
+          test "$GITHUB_REF_TYPE" != tag || test "$GITHUB_REF_NAME" = "v$APP_VERSION"
           test "$(uname -m)" = arm64
       - name: Install pinned Flutter SDK and Lima
         run: |
@@ -131,7 +133,7 @@ jobs:
 
   publish:
     name: Publish one GitHub Release
-    if: github.event_name == 'push'
+    if: github.ref_type == 'tag'
     needs: [android, ios, macos]
     runs-on: ubuntu-latest
     steps:
