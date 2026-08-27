@@ -33,10 +33,16 @@ SOURCE="$RESOURCES/gateway-source"
 mkdir -p "$RESOURCES" "$SOURCE"
 install -m 0755 "$HOSTD_DIR/target/aarch64-apple-darwin/release/mdd-hostd" "$RESOURCES/mdd-hostd"
 install -m 0755 "$LIMACTL_BIN" "$RESOURCES/limactl"
-install -m 0644 "$HOSTD_DIR/templates/mdd-vm.yaml" "$RESOURCES/mdd-vm.yaml"
-"$LIMACTL_BIN" template copy --embed-all template:ubuntu-24.04 > "$RESOURCES/mdd-base.yaml"
-"$LIMACTL_BIN" template validate "$RESOURCES/mdd-base.yaml"
-chmod 0644 "$RESOURCES/mdd-base.yaml"
+"$LIMACTL_BIN" template copy --embed-all "$HOSTD_DIR/templates/mdd-vm.yaml" > "$RESOURCES/mdd-vm.yaml"
+if ! grep -Fq '__MDD_SOURCE__' "$RESOURCES/mdd-vm.yaml"; then
+  echo "expanded Lima template lost the runtime source mount placeholder" >&2
+  exit 1
+fi
+if grep -Eq '__MDD_BASE__|template:(//)?ubuntu-24\.04' "$RESOURCES/mdd-vm.yaml"; then
+  echo "expanded Lima template still contains a runtime base-template dependency" >&2
+  exit 1
+fi
+chmod 0644 "$RESOURCES/mdd-vm.yaml"
 
 for item in control engine host patches tools webui install.sh update-policy.json VERSION; do
   if [ -d "$REPO_DIR/$item" ]; then

@@ -32,9 +32,10 @@ v1.0.2 additionally carries the documented
 runs the smoke test through LaunchServices/`launchd`, matching a Finder launch on
 newer macOS versions.
 
-v1.0.4 bundles an expanded, self-contained Ubuntu 24.04 Lima base template and
-validates the final rendered VM configuration with the bundled `limactl`. The
-installed App no longer depends on Homebrew's external Lima template directory.
+v1.0.5 expands the complete VM configuration into one self-contained Lima YAML
+at build time and validates the final source-mounted configuration with the
+bundled `limactl`. The installed App has no runtime base-template locator or
+dependency on Homebrew's external Lima template directory.
 
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.

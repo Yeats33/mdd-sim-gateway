@@ -3,9 +3,9 @@ name: Native Apps Release
 on:
   push:
     branches:
-      - 'release/v1.0.4'
+      - 'release/v1.0.5'
     tags:
-      - 'v1.0.4'
+      - 'v1.0.5'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
 
 env:
   FLUTTER_VERSION: 3.44.9
-  APP_VERSION: 1.0.4
+  APP_VERSION: 1.0.5
 
 jobs:
   android:
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-android
-          path: dist/android/mdd-sim-gateway-1.0.4-android-arm64-v8a.apk
+          path: dist/android/mdd-sim-gateway-1.0.5-android-arm64-v8a.apk
           if-no-files-found: error
 
   ios:
@@ -84,7 +84,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-ios
-          path: dist/ios/mdd-sim-gateway-1.0.4-ios-unsigned.ipa
+          path: dist/ios/mdd-sim-gateway-1.0.5-ios-unsigned.ipa
           if-no-files-found: error
 
   macos:
@@ -130,7 +130,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-macos
-          path: dist/macos/mdd-sim-gateway-1.0.4-macos-arm64-ad-hoc.dmg
+          path: dist/macos/mdd-sim-gateway-1.0.5-macos-arm64-ad-hoc.dmg
           if-no-files-found: error
 
   publish:
@@ -152,17 +152,17 @@ jobs:
       - name: Verify assets and checksums
         run: |
           set -eu
-          test -f release-assets/mdd-sim-gateway-1.0.4-android-arm64-v8a.apk
-          test -f release-assets/mdd-sim-gateway-1.0.4-ios-unsigned.ipa
-          test -f release-assets/mdd-sim-gateway-1.0.4-macos-arm64-ad-hoc.dmg
+          test -f release-assets/mdd-sim-gateway-1.0.5-android-arm64-v8a.apk
+          test -f release-assets/mdd-sim-gateway-1.0.5-ios-unsigned.ipa
+          test -f release-assets/mdd-sim-gateway-1.0.5-macos-arm64-ad-hoc.dmg
           cd release-assets
           sha256sum mdd-sim-gateway-* > SHA256SUMS
           sha256sum --check SHA256SUMS
-      - name: Publish v1.0.4
+      - name: Publish v1.0.5
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --verify-tag \
-            --title "MDD Sim Gateway v1.0.4" \
-            --notes-file docs/RELEASE_NOTES_v1.0.4.md
+            --title "MDD Sim Gateway v1.0.5" \
+            --notes-file docs/RELEASE_NOTES_v1.0.5.md

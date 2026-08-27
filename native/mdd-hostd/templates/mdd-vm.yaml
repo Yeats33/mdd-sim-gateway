@@ -1,4 +1,4 @@
-base: __MDD_BASE__
+base: template:ubuntu-24.04
 vmType: vz
 arch: aarch64
 cpus: 4

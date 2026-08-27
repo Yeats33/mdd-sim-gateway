@@ -71,13 +71,6 @@ impl HostConfig {
                 bail!("required path does not exist: {}", path.display());
             }
         }
-        let base = self.lima_base_template();
-        if !base.is_file() {
-            bail!(
-                "required Lima base template does not exist: {}",
-                base.display()
-            );
-        }
         Ok(self)
     }
 
@@ -97,10 +90,6 @@ impl HostConfig {
         self.lima_template
             .as_deref()
             .expect("validated Lima template")
-    }
-
-    pub fn lima_base_template(&self) -> PathBuf {
-        self.lima_template().with_file_name("mdd-base.yaml")
     }
 
     pub fn rendered_template(&self) -> PathBuf {
@@ -174,10 +163,8 @@ mod tests {
     fn config(root: &Path, name: &str) -> HostConfig {
         let source = root.join("source");
         let template = root.join("template.yaml");
-        let base = root.join("mdd-base.yaml");
         fs::create_dir_all(&source).unwrap();
         fs::write(&template, "vmType: vz\n").unwrap();
-        fs::write(&base, "images: []\n").unwrap();
         HostConfig {
             bind: "127.0.0.1:48630".into(),
             state_dir: Some(root.join("state")),
