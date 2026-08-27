@@ -24,11 +24,11 @@ jobs:
           flutter pub get
           dart analyze
           flutter test
-      - name: Build Android arm64 debug acceptance artifact
+      - name: Build Android arm64 release-mode acceptance artifact
         working-directory: clients/mdd_gateway_app
         run: |
-          flutter build apk --debug --target-platform android-arm64
-          apk=build/app/outputs/flutter-apk/app-debug.apk
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
+          apk=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           test -f "$apk"
           abis=$(unzip -Z1 "$apk" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)
           test "$abis" = arm64-v8a
