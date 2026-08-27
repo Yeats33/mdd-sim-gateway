@@ -64,8 +64,10 @@ assert_adhoc() {
 }
 
 assert_library_validation_exception() {
-  value=$(codesign --display --entitlements :- "$APP_DIR" 2>/dev/null | \
-    /usr/bin/plutil -extract com.apple.security.cs.disable-library-validation raw -)
+  if ! value=$(codesign --display --entitlements - --xml "$APP_DIR" 2>/dev/null | \
+    /usr/bin/plutil -extract com.apple.security.cs.disable-library-validation raw -o - -); then
+    fail "cannot extract the final app entitlements"
+  fi
   [ "$value" = true ] || \
     fail "final app signature does not disable library validation"
 }
