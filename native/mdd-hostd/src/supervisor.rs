@@ -1,9 +1,15 @@
 use std::{fs, path::Path, sync::Arc};
+#[cfg(target_os = "macos")]
+use std::{path::PathBuf, process::Stdio, time::Duration};
 
 use serde::Serialize;
 use thiserror::Error;
+#[cfg(target_os = "macos")]
+use tokio::process::{Child, Command};
 use tokio::{net::TcpStream, sync::Mutex};
 
+#[cfg(target_os = "macos")]
+use crate::pcsc_bridge::{MAC_PCSC_BRIDGE_PORT, ssh_forward_args};
 use crate::{config::HostConfig, process::CommandRunner};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -48,6 +54,8 @@ pub struct Supervisor {
     config: HostConfig,
     runner: Arc<dyn CommandRunner>,
     operation_lock: Mutex<()>,
+    #[cfg(target_os = "macos")]
+    pcsc_tunnel: Mutex<Option<Child>>,
 }
 
 impl Supervisor {
@@ -56,6 +64,8 @@ impl Supervisor {
             config,
             runner,
             operation_lock: Mutex::new(()),
+            #[cfg(target_os = "macos")]
+            pcsc_tunnel: Mutex::new(None),
         }
     }
 
@@ -167,12 +177,110 @@ impl Supervisor {
                 detail: "Linux VM is not running".into(),
             });
         }
-        self.guest_install("configure Mac PC/SC bridge", "macos-pcsc")
-            .await?;
+        let installer = self.config.source_dir().join("install.sh");
+        self.run_lima(
+            "copy Mac PC/SC installer",
+            vec![
+                "copy".into(),
+                "--backend=scp".into(),
+                installer.display().to_string(),
+                format!("{}:/tmp/mdd-macos-pcsc-install.sh", self.config.vm_name),
+            ],
+        )
+        .await?;
+        self.run_lima(
+            "configure Mac PC/SC bridge",
+            self.guest_args(vec![
+                "sudo".into(),
+                "env".into(),
+                "MDD_DATA_DIR=/var/lib/mdd-sim-gateway".into(),
+                "MDD_MACOS_PCSC_BRIDGE=1".into(),
+                "MDD_MACOS_PCSC_BASE_PORT=32512".into(),
+                "/bin/sh".into(),
+                "/tmp/mdd-macos-pcsc-install.sh".into(),
+                "macos-pcsc".into(),
+            ]),
+        )
+        .await?;
+        #[cfg(target_os = "macos")]
+        self.ensure_pcsc_tunnel().await?;
         Ok(OperationResult {
             ok: true,
             operation: "macos_pcsc".into(),
             detail: "Mac PC/SC bridge configured in Linux VM".into(),
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    async fn ensure_pcsc_tunnel(&self) -> Result<(), SupervisorError> {
+        if pcsc_bridge_port_ready().await {
+            return Ok(());
+        }
+
+        let mut managed = self.pcsc_tunnel.lock().await;
+        if let Some(child) = managed.as_mut() {
+            match child.try_wait() {
+                Ok(None) => return Ok(()),
+                Ok(Some(_)) => *managed = None,
+                Err(source) => {
+                    return Err(SupervisorError::Spawn {
+                        program: "/usr/bin/ssh".into(),
+                        source,
+                    });
+                }
+            }
+        }
+
+        let ssh_config = self
+            .run_lima(
+                "locate VM SSH config",
+                vec![
+                    "list".into(),
+                    self.config.vm_name.clone(),
+                    "--format".into(),
+                    "{{.SSHConfigFile}}".into(),
+                ],
+            )
+            .await?;
+        let ssh_config = PathBuf::from(ssh_config);
+        if !ssh_config.is_file() {
+            return Err(SupervisorError::Command {
+                operation: "locate VM SSH config".into(),
+                detail: format!("SSH config does not exist: {}", ssh_config.display()),
+            });
+        }
+
+        let mut command = Command::new("/usr/bin/ssh");
+        command
+            .args(ssh_forward_args(&ssh_config, &self.config.vm_name))
+            .kill_on_drop(true)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit());
+        let mut child = command.spawn().map_err(|source| SupervisorError::Spawn {
+            program: "/usr/bin/ssh".into(),
+            source,
+        })?;
+        for _ in 0..50 {
+            if pcsc_bridge_port_ready().await {
+                *managed = Some(child);
+                return Ok(());
+            }
+            if let Some(status) = child.try_wait().map_err(|source| SupervisorError::Spawn {
+                program: "/usr/bin/ssh".into(),
+                source,
+            })? {
+                return Err(SupervisorError::Command {
+                    operation: "start Mac PC/SC SSH tunnel".into(),
+                    detail: format!("ssh exited with {status}"),
+                });
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let _ = child.kill().await;
+        Err(SupervisorError::Command {
+            operation: "start Mac PC/SC SSH tunnel".into(),
+            detail: "loopback port 32512 was not ready after 5 seconds".into(),
         })
     }
 
@@ -319,6 +427,16 @@ fn yaml_string(path: &Path) -> String {
             .replace('"', "\\\"")
             .replace('\n', "")
     )
+}
+
+#[cfg(target_os = "macos")]
+async fn pcsc_bridge_port_ready() -> bool {
+    tokio::time::timeout(
+        Duration::from_millis(300),
+        TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, MAC_PCSC_BRIDGE_PORT)),
+    )
+    .await
+    .is_ok_and(|result| result.is_ok())
 }
 
 #[cfg(test)]
@@ -495,6 +613,7 @@ mod tests {
         let config = config(root.path());
         let runner = Arc::new(MockRunner::new(vec![
             output(0, "Running"),
+            output(0, "copied"),
             output(0, "bridge configured"),
         ]));
         let supervisor = Supervisor::new(config, runner.clone());
@@ -503,8 +622,10 @@ mod tests {
 
         assert!(result.ok);
         let calls = runner.calls.lock().unwrap();
-        assert_eq!(calls.len(), 2);
-        assert!(calls[1].iter().any(|arg| arg == "MDD_MACOS_PCSC_BRIDGE=1"));
-        assert!(calls[1].iter().any(|arg| arg == "macos-pcsc"));
+        assert_eq!(calls.len(), 3);
+        assert!(calls[1].iter().any(|arg| arg == "copy"));
+        assert!(calls[1].iter().any(|arg| arg == "--backend=scp"));
+        assert!(calls[2].iter().any(|arg| arg == "MDD_MACOS_PCSC_BRIDGE=1"));
+        assert!(calls[2].iter().any(|arg| arg == "macos-pcsc"));
     }
 }

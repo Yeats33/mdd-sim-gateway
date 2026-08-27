@@ -3452,7 +3452,11 @@ async def _unified_devices() -> list[dict]:
         if not device_present:
             vowifi.update(actual="off", available=False, reason="Device not connected")
         elif not inst:
-            vowifi.update(available=False, reason="Insert a readable SIM before enabling VoWiFi")
+            vowifi.update(
+                available=False,
+                reason=str((native_card or {}).get("error")
+                           or "Insert a readable SIM before enabling VoWiFi"),
+            )
         elif is_draft:
             vowifi.update(available=False,
                           reason="Automatic setup is waiting for SIM or hardware information")

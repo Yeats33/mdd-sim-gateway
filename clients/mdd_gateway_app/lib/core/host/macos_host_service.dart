@@ -26,7 +26,7 @@ class MacHostStatus {
 }
 
 class MacHostService {
-  static const _protocolVersion = 3;
+  static const _protocolVersion = 4;
 
   MacHostService({Uri? endpoint})
     : endpoint = endpoint ?? Uri.parse('http://127.0.0.1:48630');

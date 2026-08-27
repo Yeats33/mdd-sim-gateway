@@ -1,8 +1,31 @@
 #[cfg(any(target_os = "macos", test))]
 use std::io::{self, Read, Write};
+#[cfg(any(target_os = "macos", test))]
+use std::{ffi::OsString, path::Path};
 
 #[cfg(any(target_os = "macos", test))]
 const MAX_VPCD_FRAME: usize = u16::MAX as usize;
+pub const MAC_PCSC_BRIDGE_PORT: u16 = 0x7f00;
+
+#[cfg(any(target_os = "macos", test))]
+pub fn ssh_forward_args(ssh_config: &Path, vm_name: &str) -> Vec<OsString> {
+    vec![
+        "-F".into(),
+        ssh_config.as_os_str().to_owned(),
+        "-o".into(),
+        "BatchMode=yes".into(),
+        "-o".into(),
+        "ExitOnForwardFailure=yes".into(),
+        "-o".into(),
+        "ServerAliveInterval=15".into(),
+        "-o".into(),
+        "ServerAliveCountMax=3".into(),
+        "-N".into(),
+        "-L".into(),
+        format!("127.0.0.1:{0}:127.0.0.1:{0}", MAC_PCSC_BRIDGE_PORT).into(),
+        format!("lima-{vm_name}").into(),
+    ]
+}
 
 #[cfg(any(target_os = "macos", test))]
 fn read_frame(reader: &mut impl Read) -> io::Result<Vec<u8>> {
@@ -48,7 +71,7 @@ mod macos {
     const VPCD_CONTROL_ON: u8 = 0x01;
     const VPCD_CONTROL_RESET: u8 = 0x02;
     const VPCD_CONTROL_ATR: u8 = 0x04;
-    const MAC_PCSC_BRIDGE_PORT: u16 = 0x7f00;
+    use super::MAC_PCSC_BRIDGE_PORT;
 
     pub fn spawn() -> io::Result<thread::JoinHandle<()>> {
         thread::Builder::new()
@@ -162,5 +185,21 @@ mod tests {
             write_frame(&mut encoded, &payload).unwrap_err().kind(),
             io::ErrorKind::InvalidData
         );
+    }
+
+    #[test]
+    fn ssh_forward_is_loopback_only_and_uses_lima_config() {
+        let args = ssh_forward_args(Path::new("/tmp/ssh.config"), "mdd-sim-gateway");
+        let rendered = args
+            .iter()
+            .map(|value| value.to_string_lossy())
+            .collect::<Vec<_>>();
+        assert!(rendered.iter().any(|value| value == "/tmp/ssh.config"));
+        assert!(
+            rendered
+                .iter()
+                .any(|value| value == "127.0.0.1:32512:127.0.0.1:32512")
+        );
+        assert_eq!(rendered.last().unwrap(), "lima-mdd-sim-gateway");
     }
 }

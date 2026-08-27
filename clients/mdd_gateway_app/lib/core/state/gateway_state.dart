@@ -8,7 +8,13 @@ import '../api/gateway_api.dart';
 
 class GatewayState extends ChangeNotifier {
   GatewayState({FlutterSecureStorage? secureStorage})
-    : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+    : _secureStorage =
+          secureStorage ??
+          const FlutterSecureStorage(
+            // Direct ad-hoc distribution has no Team ID for the data-protection
+            // keychain. The login keychain remains OS-encrypted and ACL-protected.
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+          );
 
   static const _baseUriKey = 'gateway.base_uri';
   static const _certificateKey = 'gateway.certificate_sha256';
@@ -47,6 +53,10 @@ class GatewayState extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    // Exercise secure storage on every launch. The packaged macOS smoke test then
+    // rejects a signature missing Keychain Sharing instead of discovering it only
+    // after a successful API mutation tries to persist the session cookie.
+    await _secureStorage.containsKey(key: _sessionCookieKey);
     final preferences = await SharedPreferences.getInstance();
     final rawUri = preferences.getString(_baseUriKey);
     username = preferences.getString(_usernameKey);

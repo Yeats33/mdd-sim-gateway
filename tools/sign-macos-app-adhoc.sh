@@ -118,6 +118,23 @@ print(",".join(key for key in required if entitlements.get(key) is not True))
   printf '%s\n' "$entitlements_xml"
 }
 
+assert_keychain_entitlement() {
+  if ! entitlements_xml=$(codesign --display --entitlements - --xml "$APP_DIR" 2>/dev/null); then
+    fail "cannot extract final App entitlements for Keychain audit"
+  fi
+  if ! valid=$(printf '%s' "$entitlements_xml" | python3 -c '
+import plistlib
+import sys
+
+entitlements = plistlib.loads(sys.stdin.buffer.read())
+value = entitlements.get("keychain-access-groups")
+print("true" if isinstance(value, list) else "false")
+'); then
+    fail "cannot parse final App Keychain entitlements"
+  fi
+  [ "$valid" = true ] || fail "final App signature is missing keychain-access-groups"
+}
+
 audit_mach_o_files() {
   find "$APP_DIR/Contents" -type f -print | while IFS= read -r candidate; do
     if is_mach_o "$candidate"; then
@@ -145,8 +162,10 @@ audit_mach_o_files
 audit_nested_bundles
 assert_adhoc "$APP_DIR"
 assert_library_validation_exception
+assert_keychain_entitlement
 assert_lima_vz_entitlements
 
 echo "All macOS executable code is ad-hoc signed with no Team ID."
 echo "The final app signature contains the library-validation exception."
+echo "The final app signature contains the Keychain Sharing entitlement."
 echo "The bundled limactl signature contains the required VZ entitlements."
