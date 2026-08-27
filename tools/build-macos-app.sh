@@ -101,5 +101,12 @@ for item in control engine host patches tools webui install.sh update-policy.jso
   fi
 done
 chmod 0755 "$SOURCE/install.sh"
+NATIVE_VERSION=$(sed -n 's/^version: \([^+]*\).*/\1/p' "$CLIENT_DIR/pubspec.yaml")
+if [ -z "$NATIVE_VERSION" ]; then
+  echo "cannot determine native App version from pubspec.yaml" >&2
+  exit 1
+fi
+printf '%s\n' "$NATIVE_VERSION" > "$SOURCE/.mdd-native-build"
+chmod 0644 "$SOURCE/.mdd-native-build"
 
 echo "$APP_DIR"

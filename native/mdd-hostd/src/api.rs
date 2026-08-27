@@ -37,12 +37,14 @@ pub fn router(supervisor: Arc<Supervisor>, token: String) -> Router {
 struct Health {
     ok: bool,
     service: &'static str,
+    protocol: u32,
 }
 
 async fn health() -> Json<Health> {
     Json(Health {
         ok: true,
         service: "mdd-hostd",
+        protocol: 2,
     })
 }
 

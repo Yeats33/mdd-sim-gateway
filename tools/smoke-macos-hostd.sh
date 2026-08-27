@@ -14,6 +14,7 @@ fi
 RESOURCES="$APP_DIR/Contents/Resources"
 HOSTD="$RESOURCES/mdd-hostd"
 SOURCE="$RESOURCES/gateway-source"
+NATIVE_BUILD="$SOURCE/.mdd-native-build"
 TEMPLATE="$RESOURCES/mdd-vm.yaml"
 LIMACTL="$RESOURCES/lima/bin/limactl"
 LIMA_SHARE="$RESOURCES/lima/share/lima"
@@ -26,6 +27,7 @@ COMPAT_GUEST_AGENT="$APP_DIR/Contents/share/lima/$(basename -- "$GUEST_AGENT")"
 for required in \
   "$HOSTD" \
   "$SOURCE" \
+  "$NATIVE_BUILD" \
   "$TEMPLATE" \
   "$LIMACTL" \
   "$GUEST_AGENT" \
@@ -36,6 +38,12 @@ for required in \
     exit 1
   }
 done
+
+if [ -n "${APP_VERSION:-}" ] && [ "$(sed -n '1p' "$NATIVE_BUILD")" != "$APP_VERSION" ]; then
+  echo "bundled gateway source native version does not match $APP_VERSION" >&2
+  exit 1
+fi
+echo "Bundled gateway source carries the native App version marker."
 
 case "$GUEST_AGENT" in
   *.gz)
@@ -99,7 +107,7 @@ while [ "$attempt" -lt 20 ]; do
   fi
   if response=$(/usr/bin/curl --fail --silent --show-error --max-time 1 \
     http://127.0.0.1:48631/v1/health 2>/dev/null); then
-    [ "$response" = '{"ok":true,"service":"mdd-hostd"}' ] || {
+    [ "$response" = '{"ok":true,"service":"mdd-hostd","protocol":2}' ] || {
       echo "unexpected mdd-hostd health response: $response" >&2
       exit 1
     }

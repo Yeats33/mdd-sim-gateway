@@ -1714,13 +1714,28 @@ cmd_build_lpac() {
 
 cmd_logs() {
   resolve_mode
+  follow=1
+  for arg in $ARGS; do
+    case "$arg" in
+      --no-follow) follow=0 ;;
+      *) die "logs: unknown argument '$arg'" ;;
+    esac
+  done
   # `|| true` so that Ctrl-C'ing out of a follow (non-zero exit) doesn't abort the caller —
   # matters when invoked from the interactive control menu.
   if [ "$MODE" = local ]; then
     have systemctl || die "systemd not available"
-    journalctl -fu mdd-sim-gateway-control || true
+    if [ "$follow" = 1 ]; then
+      journalctl -fu mdd-sim-gateway-control || true
+    else
+      journalctl -u mdd-sim-gateway-control -n 200 --no-pager || true
+    fi
   else
-    docker logs -f "$CONTROL_NAME" || true
+    if [ "$follow" = 1 ]; then
+      docker logs -f "$CONTROL_NAME" || true
+    else
+      docker logs --tail 200 "$CONTROL_NAME" || true
+    fi
   fi
 }
 

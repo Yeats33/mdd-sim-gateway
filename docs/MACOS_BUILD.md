@@ -53,6 +53,12 @@ boot; GitHub-hosted macOS may skip only the exact
 The minimal runtime smoke stays separate from validation of the production
 8 GiB template.
 
+v1.0.8 treats a running VM with an unavailable gateway as an incomplete install
+and idempotently reconciles it instead of waiting without action. The App and
+helper negotiate host-service protocol 2, safely replace a legacy listener on
+upgrade, and stage gateway source by native App version. Timeout diagnostics use
+a bounded 200-line log snapshot rather than a blocking follow.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 

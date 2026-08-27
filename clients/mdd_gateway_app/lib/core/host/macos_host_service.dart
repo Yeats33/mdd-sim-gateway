@@ -16,6 +16,8 @@ class MacHostStatus {
   final bool gatewayReady;
   final String gatewayUrl;
 
+  bool get requiresGatewayInstall => !gatewayReady && vm != 'broken';
+
   factory MacHostStatus.fromJson(Map<String, dynamic> value) => MacHostStatus(
     vm: value['vm']?.toString() ?? 'broken',
     gatewayReady: value['gateway_ready'] == true,
@@ -24,6 +26,8 @@ class MacHostStatus {
 }
 
 class MacHostService {
+  static const _protocolVersion = 2;
+
   MacHostService({Uri? endpoint})
     : endpoint = endpoint ?? Uri.parse('http://127.0.0.1:48630');
 
@@ -35,9 +39,13 @@ class MacHostService {
     if (!Platform.isMacOS) {
       throw UnsupportedError('Mac host service is available only on macOS.');
     }
-    if (await _healthy()) {
+    final runningProtocol = await _hostProtocol();
+    if (runningProtocol == _protocolVersion) {
       await _loadToken();
       return;
+    }
+    if (runningProtocol != null) {
+      await _stopLegacyHostService(runningProtocol);
     }
     final resources = _resourcesDirectory();
     final support = await getApplicationSupportDirectory();
@@ -181,6 +189,7 @@ class MacHostService {
   Future<Map<String, dynamic>> stop() => _request('POST', '/v1/stop');
   Future<Map<String, dynamic>> restart() => _request('POST', '/v1/restart');
   Future<Map<String, dynamic>> reload() => _request('POST', '/v1/reload');
+  Future<Map<String, dynamic>> logs() => _request('GET', '/v1/logs');
   Future<Map<String, dynamic>> pairing({String? lanHost}) => _request(
     'POST',
     '/v1/pairing',
@@ -188,6 +197,10 @@ class MacHostService {
   );
 
   Future<bool> _healthy() async {
+    return await _hostProtocol() == _protocolVersion;
+  }
+
+  Future<int?> _hostProtocol() async {
     try {
       final client = HttpClient()
         ..connectionTimeout = const Duration(seconds: 1);
@@ -195,12 +208,50 @@ class MacHostService {
       final response = await request.close().timeout(
         const Duration(seconds: 1),
       );
-      await response.drain<void>();
+      final body = await utf8.decodeStream(response);
       client.close(force: true);
-      return response.statusCode == HttpStatus.ok;
+      if (response.statusCode != HttpStatus.ok) return null;
+      final decoded = jsonDecode(body);
+      if (decoded is! Map || decoded['service'] != 'mdd-hostd') return null;
+      return decoded['protocol'] is int ? decoded['protocol'] as int : 1;
     } on Object {
-      return false;
+      return null;
     }
+  }
+
+  Future<void> _stopLegacyHostService(int protocol) async {
+    if (!const {'127.0.0.1', '::1', 'localhost'}.contains(endpoint.host)) {
+      throw HttpException('拒绝终止非本机地址 ${endpoint.host} 上的旧版 host service。');
+    }
+    final lsof = File('/usr/sbin/lsof');
+    if (!lsof.existsSync()) {
+      throw FileSystemException(
+        '检测到旧版 mdd-hostd 协议 $protocol，但系统缺少 /usr/sbin/lsof，无法安全重启。',
+      );
+    }
+    final result = await Process.run(lsof.path, [
+      '-nP',
+      '-iTCP:${endpoint.port}',
+      '-sTCP:LISTEN',
+      '-t',
+    ]);
+    final pids = result.stdout
+        .toString()
+        .split(RegExp(r'\s+'))
+        .map(int.tryParse)
+        .whereType<int>()
+        .toSet();
+    if (pids.isEmpty) {
+      throw HttpException('检测到旧版 mdd-hostd 协议 $protocol，但无法定位其本地监听进程。');
+    }
+    for (final pid in pids) {
+      Process.killPid(pid, ProcessSignal.sigterm);
+    }
+    for (var attempt = 0; attempt < 30; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      if (await _hostProtocol() == null) return;
+    }
+    throw HttpException('旧版 mdd-hostd 协议 $protocol 未能在 3 秒内安全退出。');
   }
 
   Future<void> _loadToken() async {
@@ -245,8 +296,11 @@ class MacHostService {
     String supportDirectory,
   ) async {
     if (!Directory(bundledSource).existsSync()) return null;
+    final nativeBuildFile = File(path.join(bundledSource, '.mdd-native-build'));
     final versionFile = File(path.join(bundledSource, 'VERSION'));
-    final rawVersion = versionFile.existsSync()
+    final rawVersion = nativeBuildFile.existsSync()
+        ? nativeBuildFile.readAsStringSync().trim()
+        : versionFile.existsSync()
         ? versionFile.readAsStringSync().trim()
         : 'development';
     final version = rawVersion.replaceAll(RegExp(r'[^0-9A-Za-z._-]'), '_');

@@ -326,22 +326,36 @@ class _AuthPageState extends State<AuthPage> {
       await host.ensureRunning();
       var status = await host.status();
       if (!mounted) return;
-      if (status.vm == 'not_installed') {
-        setState(() => _hostMessage = '正在创建 Linux VM 并安装 Docker 网关；首次运行需要几分钟…');
-        await host.install();
-      } else if (status.vm == 'stopped') {
-        setState(() => _hostMessage = '正在启动 Linux VM…');
-        await host.start();
-      } else if (status.vm == 'broken') {
+      if (status.vm == 'broken') {
         throw const HttpException('Lima VM 状态不可用，请检查安装日志。');
       }
-      for (var attempt = 0; attempt < 60; attempt++) {
+      if (status.requiresGatewayInstall) {
+        setState(() {
+          _hostMessage = switch (status.vm) {
+            'not_installed' => '正在创建 Linux VM 并安装 Docker 网关；首次运行可能需要较长时间…',
+            'stopped' => '正在启动 Linux VM，并继续安装或修复 Docker 网关…',
+            _ => 'Linux VM 已运行，正在安装或修复尚未就绪的网关控制面…',
+          };
+        });
+        await host.install();
+      }
+      for (var attempt = 0; attempt < 120; attempt++) {
         status = await host.status();
         if (status.gatewayReady) break;
         await Future<void>.delayed(const Duration(seconds: 1));
       }
       if (!status.gatewayReady) {
-        throw const HttpException('Linux VM 已启动，但网关控制面尚未就绪。');
+        var detail = '';
+        try {
+          final result = await host.logs();
+          detail = result['detail']?.toString().trim() ?? '';
+        } on Object catch (error) {
+          detail = '无法读取诊断：$error';
+        }
+        throw HttpException(
+          'Linux VM 已启动，但网关控制面尚未就绪。'
+          '${detail.isEmpty ? '' : '\n$detail'}',
+        );
       }
       _endpoint.text = status.gatewayUrl;
       setState(() => _hostMessage = '本机网关已就绪，正在核对 HTTPS 证书…');

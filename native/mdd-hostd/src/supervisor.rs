@@ -77,11 +77,13 @@ impl Supervisor {
     pub async fn install(&self) -> Result<OperationResult, SupervisorError> {
         let _guard = self.operation_lock.lock().await;
         self.ensure_created().await?;
-        self.run_lima(
-            "start VM",
-            vec!["start".into(), self.config.vm_name.clone()],
-        )
-        .await?;
+        if self.vm_state().await != VmState::Running {
+            self.run_lima(
+                "start VM",
+                vec!["start".into(), self.config.vm_name.clone()],
+            )
+            .await?;
+        }
         self.guest_install("install gateway", "install").await?;
         Ok(OperationResult {
             ok: true,
@@ -165,6 +167,7 @@ impl Supervisor {
                     "sudo".into(),
                     "/mnt/mdd-source/install.sh".into(),
                     "logs".into(),
+                    "--no-follow".into(),
                 ]),
             )
             .await?;
@@ -423,5 +426,47 @@ mod tests {
         );
         let rendered = fs::read_to_string(config.rendered_template()).unwrap();
         assert!(!rendered.contains("__MDD_SOURCE__"));
+    }
+
+    #[tokio::test]
+    async fn installs_gateway_without_restarting_an_already_running_vm() {
+        let root = tempfile::tempdir().unwrap();
+        let config = config(root.path());
+        config.ensure_state_dir().unwrap();
+        let runner = Arc::new(MockRunner::new(vec![
+            output(0, "Running"),
+            output(0, "Running"),
+            output(0, "install complete"),
+        ]));
+        let supervisor = Supervisor::new(config, runner.clone());
+
+        let result = supervisor.install().await.unwrap();
+
+        assert!(result.ok);
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls.len(), 3);
+        assert!(
+            calls
+                .iter()
+                .all(|call| !call.iter().any(|arg| arg == "start"))
+        );
+        assert_eq!(calls[2][1], "shell");
+        assert!(calls[2].iter().any(|arg| arg == "install"));
+    }
+
+    #[tokio::test]
+    async fn reads_a_bounded_gateway_log_snapshot() {
+        let root = tempfile::tempdir().unwrap();
+        let config = config(root.path());
+        let runner = Arc::new(MockRunner::new(vec![output(0, "recent logs")]));
+        let supervisor = Supervisor::new(config, runner.clone());
+
+        let result = supervisor.logs().await.unwrap();
+
+        assert_eq!(result.detail, "recent logs");
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert!(calls[0].iter().any(|arg| arg == "logs"));
+        assert!(calls[0].iter().any(|arg| arg == "--no-follow"));
     }
 }
