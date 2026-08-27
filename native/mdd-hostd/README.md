@@ -20,6 +20,9 @@ cargo test
 ```
 
 The template forwards the management port and bounded WebRTC WSS port range to
-the LAN. It does not expose Docker's socket or daemon TCP port. Hardware access
-will use a separately authenticated host bridge because Apple Virtualization
-does not offer general USB passthrough equivalent to a Linux host.
+the LAN. It does not expose Docker's socket or daemon TCP port. Apple
+Virtualization does not offer general USB passthrough equivalent to a Linux
+host. On macOS, `mdd-hostd` therefore reads one inserted physical card via the
+system PC/SC framework and relays VPCD frames through a loopback-only Lima
+forward to an isolated one-slot virtual reader in the guest. The bridge port is
+never exposed to the LAN.

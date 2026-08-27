@@ -4,6 +4,8 @@ use anyhow::Context;
 use clap::Parser;
 use mdd_hostd::{api, config::HostConfig, process::ProcessRunner, supervisor::Supervisor};
 use tracing::info;
+#[cfg(target_os = "macos")]
+use tracing::warn;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,6 +26,34 @@ async fn main() -> anyhow::Result<()> {
         supervisor.validate_template().await?;
         info!("MDD Lima VM template validated");
         return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    let _pcsc_bridge = mdd_hostd::pcsc_bridge::spawn().context("start Mac PC/SC bridge")?;
+    #[cfg(target_os = "macos")]
+    {
+        let supervisor = Arc::clone(&supervisor);
+        tokio::spawn(async move {
+            let mut last_error = String::new();
+            for attempt in 0..60 {
+                match supervisor.reconcile_pcsc_bridge().await {
+                    Ok(_) => {
+                        info!("Mac PC/SC bridge configured in Linux VM");
+                        return;
+                    }
+                    Err(error) => {
+                        let current = error.to_string();
+                        if current != last_error {
+                            info!(reason = %current, "Mac PC/SC guest bridge waiting");
+                            last_error = current;
+                        }
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                if attempt == 59 {
+                    warn!(reason = %last_error, "Mac PC/SC guest bridge was not configured");
+                }
+            }
+        });
     }
     let app = api::router(supervisor, token);
     let listener = tokio::net::TcpListener::bind(bind).await?;

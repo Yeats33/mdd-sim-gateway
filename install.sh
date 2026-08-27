@@ -109,6 +109,8 @@ CCID_SHA256="6d5e6a6884090831ed155ee75cbc03aed252bd8158d94f507a94f05ebaba296c"
 VPCD_VERSION="${VPCD_VERSION:-0.8}"
 VPCD_SHA256="b428c399d5f014a350db0e8e5947ce69392429cc1aebdf3830af3c7f8078b18f"
 VPCD_SLOTS="${VPCD_SLOTS:-4}"
+MACOS_PCSC_CONFIG="/etc/reader.conf.d/mdd-macos-pcsc"
+MACOS_PCSC_SLOT_COUNT=1
 
 # Host-side runtime dependencies. Versions and hashes are pinned so an upstream replacement
 # cannot silently change what this root installer executes. Override only for a reviewed release.
@@ -912,6 +914,14 @@ installed_vpcd_slots() {
   printf '2'
 }
 
+vpcd_drivers_dir() {
+  directory=$(pkg-config libpcsclite --variable usbdropdir 2>/dev/null || true)
+  [ -n "$directory" ] && directory="$directory/serial"
+  [ -d "$directory" ] || directory=$(dirname "$(find /usr/lib /usr/local/lib -name 'libifdvpcd.so*' -print -quit 2>/dev/null || true)" 2>/dev/null)
+  [ -n "$directory" ] && [ -d "$directory" ] || directory=/usr/lib/pcsc/drivers/serial
+  printf '%s\n' "$directory"
+}
+
 # Build + install libifdvpcd with enough slots for this gateway's logical channels. The packaged
 # driver is compiled for two and the count has no runtime override, so the third channel is
 # unreachable until the driver itself is replaced. Idempotent via a slot-tagged marker beside the
@@ -921,11 +931,7 @@ ensure_vpcd_host() {
   # Debian keeps this out of the multiarch tree today, but a distribution that does not would
   # otherwise get a driver installed somewhere pcscd never looks — and the only symptom would
   # be the two-slot behaviour this exists to fix, with the build reporting success.
-  drivers_dir=$(pkg-config libpcsclite --variable usbdropdir 2>/dev/null || true)
-  [ -n "$drivers_dir" ] && drivers_dir="$drivers_dir/serial"
-  # Fall back to wherever the packaged driver already sits, then to the historical path.
-  [ -d "$drivers_dir" ] || drivers_dir=$(dirname "$(find /usr/lib /usr/local/lib -name 'libifdvpcd.so*' -print -quit 2>/dev/null || true)" 2>/dev/null)
-  [ -n "$drivers_dir" ] && [ -d "$drivers_dir" ] || drivers_dir=/usr/lib/pcsc/drivers/serial
+  drivers_dir=$(vpcd_drivers_dir)
   vpcd_marker="$drivers_dir/.mdd-vpcd-slots-${VPCD_SLOTS}"
   if [ -f "$vpcd_marker" ]; then
     info "virtual smart-card driver already provides $VPCD_SLOTS slots ($drivers_dir)"
@@ -967,6 +973,7 @@ ensure_vpcd_host() {
     && make -C src/ifd-vpcd install >/dev/null \
   ) || { rm -rf "$tmp"; warn "could not build the virtual smart-card driver; the packaged two-slot driver stays in place and a module's third logical channel will be unavailable"; return 1; }
   rm -rf "$tmp"
+  have ldconfig && ldconfig
   # configure installs its own reader definition; this gateway writes per-modem ones instead.
   disable_packaged_vpcd_reader
   rm -f "$drivers_dir/.mdd-vpcd-slots-"* 2>/dev/null || true
@@ -981,6 +988,81 @@ ensure_vpcd_host() {
     systemctl restart pcscd 2>/dev/null || true
   fi
   info "virtual smart-card driver installed with $VPCD_SLOTS slots ($drivers_dir)"
+}
+
+ensure_macos_pcsc_bridge() {
+  [ "${MDD_MACOS_PCSC_BRIDGE:-0}" = 1 ] || return 0
+  base_port="${MDD_MACOS_PCSC_BASE_PORT:-32512}"
+  case "$base_port" in ''|*[!0-9]*) die "invalid Mac PC/SC bridge port: $base_port";; esac
+  [ "$base_port" -ge 1024 ] && [ "$base_port" -le 65535 ] || \
+    die "Mac PC/SC bridge port must be between 1024 and 65535"
+
+  ensure_vpcd_host || die "Mac PC/SC bridge requires the virtual smart-card driver"
+  drivers_dir=$(vpcd_drivers_dir)
+  bridge_dir="$drivers_dir/mdd-macos-pcsc"
+  bridge_lib="$bridge_dir/libifdvpcd-macos.so"
+  bridge_marker="$bridge_dir/.mdd-vpcd-${VPCD_VERSION}-slots-${MACOS_PCSC_SLOT_COUNT}"
+  if [ ! -f "$bridge_lib" ] || [ ! -f "$bridge_marker" ]; then
+    info "building isolated one-slot virtual reader for the Mac PC/SC bridge…"
+    tmp=$(mktemp -d)
+    download_verified \
+      "https://github.com/frankmorgner/vsmartcard/archive/refs/tags/virtualsmartcard-${VPCD_VERSION}.tar.gz" \
+      "$tmp/vsmartcard.tar.gz" "$VPCD_SHA256"
+    ( cd "$tmp" \
+      && tar xf vsmartcard.tar.gz \
+      && cd "vsmartcard-virtualsmartcard-${VPCD_VERSION}/virtualsmartcard" \
+      && autoreconf -vif . >/dev/null 2>&1 \
+      && ./configure --enable-serialconfdir=/etc/reader.conf.d \
+                     --enable-serialdropdir="$drivers_dir" \
+                     --enable-vpcdslots="$MACOS_PCSC_SLOT_COUNT" \
+                     --disable-dependency-tracking >/dev/null \
+      && make -C src/vpcd >/dev/null \
+      && make -C src/ifd-vpcd >/dev/null \
+    ) || { rm -rf "$tmp"; die "failed to build the isolated Mac PC/SC virtual reader"; }
+    source_lib="$tmp/vsmartcard-virtualsmartcard-${VPCD_VERSION}/virtualsmartcard/src/ifd-vpcd/.libs/libifdvpcd.so"
+    [ -f "$source_lib" ] || { rm -rf "$tmp"; die "Mac PC/SC virtual-reader library was not produced"; }
+    install -d -m 0755 "$bridge_dir"
+    install -m 0755 "$source_lib" "$bridge_lib"
+    rm -f "$bridge_dir/.mdd-vpcd-"* 2>/dev/null || true
+    : > "$bridge_marker"
+    chmod 0644 "$bridge_marker"
+    rm -rf "$tmp"
+  else
+    info "isolated Mac PC/SC virtual reader already installed"
+  fi
+
+  config_tmp="$MACOS_PCSC_CONFIG.tmp"
+  cat > "$config_tmp" <<EOF
+FRIENDLYNAME "Mac USB Smart Card Bridge"
+DEVICENAME /dev/null:0x$(printf '%04X' "$base_port")
+LIBPATH $bridge_lib
+CHANNELID 0x$(printf '%04X' "$base_port")
+EOF
+  chmod 0644 "$config_tmp"
+  if [ ! -f "$MACOS_PCSC_CONFIG" ] || ! cmp -s "$config_tmp" "$MACOS_PCSC_CONFIG"; then
+    mv -f "$config_tmp" "$MACOS_PCSC_CONFIG"
+    install -d -m 0700 "$MDD_DATA_DIR/orchestrator"
+    : > "$MDD_DATA_DIR/orchestrator/pcsc-maintenance"
+    chmod 0600 "$MDD_DATA_DIR/orchestrator/pcsc-maintenance" 2>/dev/null || true
+    systemctl restart pcscd.service >/dev/null 2>&1 || systemctl restart pcscd >/dev/null 2>&1 || true
+    info "Mac PC/SC virtual reader registered on loopback bridge port $base_port"
+  else
+    rm -f "$config_tmp"
+    info "Mac PC/SC virtual-reader configuration already current"
+  fi
+}
+
+remove_macos_pcsc_bridge() {
+  changed=0
+  if [ -f "$MACOS_PCSC_CONFIG" ]; then rm -f "$MACOS_PCSC_CONFIG"; changed=1; fi
+  drivers_dir=$(vpcd_drivers_dir)
+  if [ -d "$drivers_dir/mdd-macos-pcsc" ]; then
+    rm -rf "$drivers_dir/mdd-macos-pcsc"
+    changed=1
+  fi
+  if [ "$changed" = 1 ] && have systemctl; then
+    systemctl restart pcscd.service >/dev/null 2>&1 || systemctl restart pcscd >/dev/null 2>&1 || true
+  fi
 }
 
 # Country routes and USB modem serial ports live in the host namespace even when the manager is
@@ -1028,6 +1110,7 @@ EOF
 remove_orchestrator() {
   if have systemctl; then systemctl disable --now mdd-sim-gateway-orchestrator >/dev/null 2>&1 || true; fi
   rm -f "$ORCHESTRATOR_UNIT" /etc/reader.conf.d/mdd-sim-gateway-modems
+  remove_macos_pcsc_bridge
   # Nothing of ours is left to collide with it, so hand the packaged reader back.
   restore_packaged_vpcd_reader
   have systemctl && systemctl daemon-reload 2>/dev/null || true
@@ -1104,6 +1187,7 @@ cmd_install() {
     warn "later installs/reloads reuse the built image."
   fi
   ensure_pcscd
+  ensure_macos_pcsc_bridge
   ensure_singbox
   ensure_xray
   ensure_cellular_tools
@@ -1162,6 +1246,7 @@ cmd_reload() {
   # full rebuild, which is what you want after changing anything the base owns.
   ensure_docker
   docker_preflight
+  ensure_macos_pcsc_bridge
   ensure_singbox
   ensure_xray
   ensure_cellular_tools
@@ -1739,6 +1824,12 @@ cmd_logs() {
   fi
 }
 
+cmd_macos_pcsc() {
+  need_root
+  ensure_pcscd
+  ensure_macos_pcsc_bridge
+}
+
 # Default action when invoked with no subcommand. Multi-functional:
 #   - NOT installed  -> run the installer (needs root).
 #   - installed      -> auto-detect the mode and offer basic controls. On a TTY this is an
@@ -1809,6 +1900,7 @@ ${B}MDD Sim Gateway installer${N}
   $0 diagnose             print a masked card-path report (readers, bridges, lpac, logs)
   $0 reset-admin          reset the local administrator (old credential file is backed up)
   $0 logs                 follow control-plane logs
+  $0 macos-pcsc           install/reconcile the loopback Mac PC/SC reader bridge
   $0 vpcd                 rebuild the virtual smart-card driver with enough card slots
   $0 build-lpac [--lpac-src PATH] [--dest DIR]   compile lpac into data/lpac (local eSIM LPA)
   $0 patch                build + install the CCID driver with the base HSIC fix (01) — opt-in,
@@ -1865,6 +1957,7 @@ case "$CMD" in
   diagnose)           cmd_diagnose ;;
   reset-admin)        cmd_reset_admin ;;
   logs)               cmd_logs ;;
+  macos-pcsc)         cmd_macos_pcsc ;;
   build-lpac)         cmd_build_lpac ;;
   patch)              cmd_patch ;;
   patch2)             cmd_patch2 ;;

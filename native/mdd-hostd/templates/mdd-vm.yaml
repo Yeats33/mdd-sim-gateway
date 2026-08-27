@@ -26,6 +26,11 @@ portForwards:
     guestIP: 0.0.0.0
     guestIPMustBeZero: false
     hostIP: 0.0.0.0
+  - guestPort: 32512
+    hostPort: 32512
+    guestIP: 0.0.0.0
+    guestIPMustBeZero: false
+    hostIP: 127.0.0.1
 
 provision:
   - mode: system

@@ -59,6 +59,12 @@ helper negotiate host-service protocol 2, safely replace a legacy listener on
 upgrade, and stage gateway source by native App version. Timeout diagnostics use
 a bounded 200-line log snapshot rather than a blocking follow.
 
+v1.0.9 implements the hardware bridge previously reserved by the architecture.
+The native helper reads the first inserted card through macOS PC/SC and relays
+the official VPCD framing over Lima port 32512, forwarded on host loopback only.
+The guest builds and registers a separately isolated one-slot `libifdvpcd`, so
+the Mac reader cannot alias modem slots or create duplicate card devices.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 

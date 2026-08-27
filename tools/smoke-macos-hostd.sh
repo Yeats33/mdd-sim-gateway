@@ -45,6 +45,16 @@ if [ -n "${APP_VERSION:-}" ] && [ "$(sed -n '1p' "$NATIVE_BUILD")" != "$APP_VERS
 fi
 echo "Bundled gateway source carries the native App version marker."
 
+if ! otool -L "$HOSTD" | grep -Fq '/System/Library/Frameworks/PCSC.framework/'; then
+  echo "bundled mdd-hostd is not linked to the macOS PCSC framework" >&2
+  exit 1
+fi
+if ! grep -Fq 'hostPort: 32512' "$TEMPLATE" || ! grep -Fq 'hostIP: 127.0.0.1' "$TEMPLATE"; then
+  echo "bundled VM template is missing the loopback-only Mac PC/SC bridge forward" >&2
+  exit 1
+fi
+echo "Bundled mdd-hostd and VM template include the loopback-only Mac PC/SC bridge."
+
 case "$GUEST_AGENT" in
   *.gz)
     gzip -t "$GUEST_AGENT"
@@ -107,7 +117,7 @@ while [ "$attempt" -lt 20 ]; do
   fi
   if response=$(/usr/bin/curl --fail --silent --show-error --max-time 1 \
     http://127.0.0.1:48631/v1/health 2>/dev/null); then
-    [ "$response" = '{"ok":true,"service":"mdd-hostd","protocol":2}' ] || {
+    [ "$response" = '{"ok":true,"service":"mdd-hostd","protocol":3}' ] || {
       echo "unexpected mdd-hostd health response: $response" >&2
       exit 1
     }

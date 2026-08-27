@@ -159,6 +159,23 @@ impl Supervisor {
         })
     }
 
+    pub async fn reconcile_pcsc_bridge(&self) -> Result<OperationResult, SupervisorError> {
+        let _guard = self.operation_lock.lock().await;
+        if self.vm_state().await != VmState::Running {
+            return Err(SupervisorError::Command {
+                operation: "configure Mac PC/SC bridge".into(),
+                detail: "Linux VM is not running".into(),
+            });
+        }
+        self.guest_install("configure Mac PC/SC bridge", "macos-pcsc")
+            .await?;
+        Ok(OperationResult {
+            ok: true,
+            operation: "macos_pcsc".into(),
+            detail: "Mac PC/SC bridge configured in Linux VM".into(),
+        })
+    }
+
     pub async fn logs(&self) -> Result<OperationResult, SupervisorError> {
         let output = self
             .run_lima(
@@ -247,6 +264,8 @@ impl Supervisor {
                 "sudo".into(),
                 "env".into(),
                 "MDD_DATA_DIR=/var/lib/mdd-sim-gateway".into(),
+                "MDD_MACOS_PCSC_BRIDGE=1".into(),
+                "MDD_MACOS_PCSC_BASE_PORT=32512".into(),
                 "/mnt/mdd-source/install.sh".into(),
                 action.into(),
             ]),
@@ -468,5 +487,24 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert!(calls[0].iter().any(|arg| arg == "logs"));
         assert!(calls[0].iter().any(|arg| arg == "--no-follow"));
+    }
+
+    #[tokio::test]
+    async fn reconciles_the_mac_pcsc_bridge_in_a_running_vm() {
+        let root = tempfile::tempdir().unwrap();
+        let config = config(root.path());
+        let runner = Arc::new(MockRunner::new(vec![
+            output(0, "Running"),
+            output(0, "bridge configured"),
+        ]));
+        let supervisor = Supervisor::new(config, runner.clone());
+
+        let result = supervisor.reconcile_pcsc_bridge().await.unwrap();
+
+        assert!(result.ok);
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert!(calls[1].iter().any(|arg| arg == "MDD_MACOS_PCSC_BRIDGE=1"));
+        assert!(calls[1].iter().any(|arg| arg == "macos-pcsc"));
     }
 }

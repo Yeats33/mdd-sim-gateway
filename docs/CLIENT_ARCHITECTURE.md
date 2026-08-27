@@ -33,8 +33,10 @@ iOS / Android Flutter client                macOS Flutter client
                                   |
                          Linux + Docker Compose
                   control plane and per-SIM engines
-                                  |
-                   USB modem / PCSC / eUICC hardware
+                                  |                 macOS system PC/SC
+                   Linux USB hardware        USB CCID reader / card
+                                                    |
+                         loopback VPCD bridge <-----+
 ```
 
 The Rust host service is an adapter and supervisor. The existing Python control
