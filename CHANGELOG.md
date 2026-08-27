@@ -22,6 +22,11 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   interpolation, exposes only the bounded management/WebRTC ports, and lets the Flutter app
   install or start the local gateway and display a certificate-bound LAN pairing QR code.
 
+- The iOS branch defines the local-network, QR camera, microphone, and background-call audio
+  permissions for the native controller and provides a signing-aware IPA build path. It keeps
+  export options and Apple credentials outside the repository and does not claim background
+  incoming calls without the APNs/PushKit service that iOS requires.
+
 ### Fixed
 
 - A paired client allowed the self-signed softphone WSS connection after checking only the
