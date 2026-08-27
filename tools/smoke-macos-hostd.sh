@@ -124,7 +124,7 @@ while [ "$attempt" -lt 20 ]; do
   fi
   if response=$(/usr/bin/curl --fail --silent --show-error --max-time 1 \
     http://127.0.0.1:48631/v1/health 2>/dev/null); then
-    [ "$response" = '{"ok":true,"service":"mdd-hostd","protocol":4}' ] || {
+    [ "$response" = '{"ok":true,"service":"mdd-hostd","protocol":5}' ] || {
       echo "unexpected mdd-hostd health response: $response" >&2
       exit 1
     }

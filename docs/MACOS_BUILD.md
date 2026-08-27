@@ -73,6 +73,11 @@ For existing VMs, helper protocol 4 copies the current bridge installer into the
 guest and creates a managed SSH loopback forward when the old Lima template has
 no static port 32512 mapping.
 
+v1.0.11 fixes PC/SC protocol negotiation for T=0-only SIMs. The native bridge
+tries explicit T=0 first, falls back to explicit T=1 for other cards, and reuses
+the selected protocol for every reset. It never asks Apple PC/SC to negotiate
+`ANY`, which returned `SCARD_W_UNRESPONSIVE_CARD` for a verified working T=0 card.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 

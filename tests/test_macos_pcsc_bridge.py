@@ -28,6 +28,8 @@ class MacPcscBridgePackagingTests(unittest.TestCase):
         self.assertIn(".transmit(&payload, &mut response)", source)
         self.assertNotIn("APDU -->", source)
         self.assertNotIn("hex::encode", source)
+        self.assertNotIn("Protocols::ANY", source)
+        self.assertIn("[CardProtocol::T0, CardProtocol::T1]", source)
 
 
 if __name__ == "__main__":

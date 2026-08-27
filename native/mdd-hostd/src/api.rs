@@ -44,7 +44,7 @@ async fn health() -> Json<Health> {
     Json(Health {
         ok: true,
         service: "mdd-hostd",
-        protocol: 4,
+        protocol: 5,
     })
 }
 

@@ -8,6 +8,16 @@ const MAX_VPCD_FRAME: usize = u16::MAX as usize;
 pub const MAC_PCSC_BRIDGE_PORT: u16 = 0x7f00;
 
 #[cfg(any(target_os = "macos", test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CardProtocol {
+    T0,
+    T1,
+}
+
+#[cfg(any(target_os = "macos", test))]
+const CARD_PROTOCOL_ORDER: [CardProtocol; 2] = [CardProtocol::T0, CardProtocol::T1];
+
+#[cfg(any(target_os = "macos", test))]
 pub fn ssh_forward_args(ssh_config: &Path, vm_name: &str) -> Vec<OsString> {
     vec![
         "-F".into(),
@@ -80,7 +90,7 @@ mod macos {
                 let mut previous = String::new();
                 loop {
                     if let Err(error) = relay_once() {
-                        let current = error.to_string();
+                        let current = format!("{error:#}");
                         if current != previous {
                             info!(reason = %current, "Mac PC/SC bridge waiting");
                             previous = current;
@@ -98,12 +108,15 @@ mod macos {
             Err(PcscError::NoReadersAvailable) => bail!("no Mac PC/SC reader is connected"),
             Err(error) => return Err(error).context("list Mac PC/SC readers"),
         };
+        let mut last_error = None;
         for reader in readers {
-            let mut card = match context.connect(&reader, ShareMode::Shared, Protocols::ANY) {
-                Ok(card) => card,
-                Err(PcscError::NoSmartcard | PcscError::RemovedCard) => continue,
-                Err(PcscError::ReaderUnavailable) => continue,
-                Err(error) => return Err(error).context("connect to Mac smart card"),
+            let (mut card, protocol) = match connect_card(&context, &reader) {
+                Ok(Some(value)) => value,
+                Ok(None) => continue,
+                Err(error) => {
+                    last_error = Some(error);
+                    continue;
+                }
             };
             let transaction = card.transaction().context("lock Mac smart card")?;
             let atr = transaction
@@ -120,15 +133,46 @@ mod macos {
                 .context("Linux VM PC/SC bridge is not ready")?;
             stream.set_nodelay(true)?;
             info!("Mac PC/SC card connected to Linux VM bridge");
-            return relay_session(transaction, stream, &atr);
+            return relay_session(transaction, stream, &atr, protocol);
+        }
+        if let Some(error) = last_error {
+            return Err(error);
         }
         bail!("no smart card is inserted in a Mac PC/SC reader")
+    }
+
+    fn connect_card(
+        context: &PcscContext,
+        reader: &std::ffi::CStr,
+    ) -> anyhow::Result<Option<(pcsc::Card, Protocols)>> {
+        let mut last_error = None;
+        for candidate in super::CARD_PROTOCOL_ORDER {
+            let protocol = match candidate {
+                super::CardProtocol::T0 => Protocols::T0,
+                super::CardProtocol::T1 => Protocols::T1,
+            };
+            match context.connect(reader, ShareMode::Shared, protocol) {
+                Ok(card) => return Ok(Some((card, protocol))),
+                Err(PcscError::NoSmartcard | PcscError::RemovedCard) => return Ok(None),
+                Err(PcscError::ReaderUnavailable) => return Ok(None),
+                Err(
+                    error @ (PcscError::ProtoMismatch
+                    | PcscError::CardUnsupported
+                    | PcscError::UnsupportedCard
+                    | PcscError::UnresponsiveCard),
+                ) => last_error = Some(error),
+                Err(error) => return Err(error).context("connect to Mac smart card"),
+            }
+        }
+        Err(last_error.expect("protocol attempts are non-empty"))
+            .context("connect to Mac smart card with T=0 or T=1")
     }
 
     fn relay_session(
         mut transaction: pcsc::Transaction<'_>,
         mut stream: TcpStream,
         atr: &[u8],
+        protocol: Protocols,
     ) -> anyhow::Result<()> {
         loop {
             let payload = read_frame(&mut stream).context("read VPCD request")?;
@@ -136,7 +180,7 @@ mod macos {
                 match payload[0] {
                     VPCD_CONTROL_ATR => write_frame(&mut stream, atr)?,
                     VPCD_CONTROL_ON | VPCD_CONTROL_RESET => transaction
-                        .reconnect(ShareMode::Shared, Protocols::ANY, Disposition::ResetCard)
+                        .reconnect(ShareMode::Shared, protocol, Disposition::ResetCard)
                         .context("reset Mac smart card")?,
                     VPCD_CONTROL_OFF => {}
                     _ => bail!("unsupported VPCD control request"),
@@ -201,5 +245,10 @@ mod tests {
                 .any(|value| value == "127.0.0.1:32512:127.0.0.1:32512")
         );
         assert_eq!(rendered.last().unwrap(), "lima-mdd-sim-gateway");
+    }
+
+    #[test]
+    fn card_protocol_negotiation_prefers_t0_then_t1() {
+        assert_eq!(CARD_PROTOCOL_ORDER, [CardProtocol::T0, CardProtocol::T1]);
     }
 }
