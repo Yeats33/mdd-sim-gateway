@@ -1,0 +1,44 @@
+name: macOS gateway host
+
+on:
+  push:
+    branches: [platform/macos]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apple-silicon-release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Confirm Apple Silicon builder
+        run: test "$(uname -m)" = arm64
+      - name: Verify Rust host service
+        working-directory: native/mdd-hostd
+        run: |
+          rustup component add rustfmt clippy
+          cargo fmt --check
+          cargo test
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo build --release --target aarch64-apple-darwin
+          hostd_type=$(file target/aarch64-apple-darwin/release/mdd-hostd)
+          case "$hostd_type" in *arm64*) ;; *) echo "$hostd_type" >&2; exit 1 ;; esac
+      - name: Install pinned Flutter SDK
+        run: |
+          git clone --depth 1 --branch 3.44.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          printf '%s\n' "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Analyze and test shared Dart code
+        working-directory: clients/mdd_gateway_app
+        run: |
+          flutter config --no-analytics
+          flutter pub get
+          dart analyze
+          flutter test
+      - name: Compile macOS release app
+        working-directory: clients/mdd_gateway_app
+        run: |
+          xcodebuild -version
+          flutter build macos --release
+          test -d "build/macos/Build/Products/Release/MDD Sim Gateway.app"
