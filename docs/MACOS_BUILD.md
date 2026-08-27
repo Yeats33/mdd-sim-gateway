@@ -27,6 +27,11 @@ the host app. It then rejects any component that retains a third-party Team ID.
 `tools/smoke-macos-app.sh` launches the packaged executable for five seconds on
 the Apple Silicon CI runner to catch `dyld` and Library Validation failures.
 
+v1.0.2 additionally carries the documented
+`com.apple.security.cs.disable-library-validation` Hardened Runtime exception and
+runs the smoke test through LaunchServices/`launchd`, matching a Finder launch on
+newer macOS versions.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 

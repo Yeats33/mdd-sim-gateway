@@ -63,6 +63,13 @@ assert_adhoc() {
   esac
 }
 
+assert_library_validation_exception() {
+  value=$(codesign --display --entitlements :- "$APP_DIR" 2>/dev/null | \
+    /usr/bin/plutil -extract com.apple.security.cs.disable-library-validation raw -)
+  [ "$value" = true ] || \
+    fail "final app signature does not disable library validation"
+}
+
 audit_mach_o_files() {
   find "$APP_DIR/Contents" -type f -print | while IFS= read -r candidate; do
     if is_mach_o "$candidate"; then
@@ -89,5 +96,7 @@ codesign --verify --deep --strict --verbose=4 "$APP_DIR"
 audit_mach_o_files
 audit_nested_bundles
 assert_adhoc "$APP_DIR"
+assert_library_validation_exception
 
 echo "All macOS executable code is ad-hoc signed with no Team ID."
+echo "The final app signature contains the library-validation exception."
