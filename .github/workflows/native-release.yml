@@ -3,7 +3,7 @@ name: Native Apps Release
 on:
   push:
     branches:
-      - 'release/v1.0.3'
+      - 'release/v1.0.4'
     tags:
       - 'v1.0.3'
   workflow_dispatch:
@@ -55,7 +55,7 @@ jobs:
           MDD_ANDROID_CERTIFICATE: ${{ runner.temp }}/android-release-certificate.pem
           MDD_ANDROID_KEY_PASSWORD_FILE: ${{ runner.temp }}/android-release-key-password
         run: ./tools/build-android-apk.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-android
           path: dist/android/mdd-sim-gateway-1.0.3-android-arm64-v8a.apk
@@ -80,7 +80,7 @@ jobs:
         run: |
           flutter config --no-analytics
           ./tools/build-ios-ipa.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-ios
           path: dist/ios/mdd-sim-gateway-1.0.3-ios-unsigned.ipa
@@ -101,6 +101,9 @@ jobs:
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           printf '%s\n' "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           rustup target add aarch64-apple-darwin
+          if brew tap 2>/dev/null | grep -Fxq 'aws/tap'; then
+            brew untap aws/tap
+          fi
           brew install lima
       - name: Build and ad-hoc sign Mac app
         env:
@@ -123,7 +126,7 @@ jobs:
           hdiutil create -volname 'MDD Sim Gateway' -srcfolder dist/macos/dmg-root \
             -ov -format UDZO "$dmg"
           hdiutil verify "$dmg"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-macos
           path: dist/macos/mdd-sim-gateway-1.0.3-macos-arm64-ad-hoc.dmg
@@ -136,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: native-*
           path: release-assets

@@ -1,2 +1,6 @@
 #include "../../Flutter/Flutter-Release.xcconfig"
 #include "Warnings.xcconfig"
+
+// The native host, Lima/vz integration, and release DMG support Apple Silicon only.
+ARCHS = arm64
+ONLY_ACTIVE_ARCH = YES
