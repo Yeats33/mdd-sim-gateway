@@ -15,13 +15,44 @@ RESOURCES="$APP_DIR/Contents/Resources"
 HOSTD="$RESOURCES/mdd-hostd"
 SOURCE="$RESOURCES/gateway-source"
 TEMPLATE="$RESOURCES/mdd-vm.yaml"
-LIMACTL="$RESOURCES/limactl"
-for required in "$HOSTD" "$SOURCE" "$TEMPLATE" "$LIMACTL"; do
+LIMACTL="$RESOURCES/lima/bin/limactl"
+LIMA_SHARE="$RESOURCES/lima/share/lima"
+GUEST_AGENT="$LIMA_SHARE/lima-guestagent.Linux-aarch64.gz"
+if [ ! -f "$GUEST_AGENT" ]; then
+  GUEST_AGENT="$LIMA_SHARE/lima-guestagent.Linux-aarch64"
+fi
+COMPAT_LIMACTL="$RESOURCES/limactl"
+COMPAT_GUEST_AGENT="$APP_DIR/Contents/share/lima/$(basename -- "$GUEST_AGENT")"
+for required in \
+  "$HOSTD" \
+  "$SOURCE" \
+  "$TEMPLATE" \
+  "$LIMACTL" \
+  "$GUEST_AGENT" \
+  "$COMPAT_LIMACTL" \
+  "$COMPAT_GUEST_AGENT"; do
   [ -e "$required" ] || {
     echo "bundled host resource missing: $required" >&2
     exit 1
   }
 done
+
+case "$GUEST_AGENT" in
+  *.gz)
+    gzip -t "$GUEST_AGENT"
+    GUEST_AGENT_MAGIC=$(gzip -dc "$GUEST_AGENT" | od -An -tx1 -N4 | tr -d ' \n')
+    ;;
+  *)
+    GUEST_AGENT_MAGIC=$(od -An -tx1 -N4 "$GUEST_AGENT" | tr -d ' \n')
+    ;;
+esac
+if [ "$GUEST_AGENT_MAGIC" != 7f454c46 ]; then
+  echo "bundled Linux-aarch64 Lima guest agent is not an ELF binary" >&2
+  exit 1
+fi
+echo "Bundled Lima Linux-aarch64 guest agent passed layout and ELF validation."
+"$COMPAT_LIMACTL" --version
+echo "Legacy bundled limactl path remains executable with a matching guest-agent layout."
 
 STATE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/mdd-hostd-smoke.XXXXXX")
 LOG_FILE="$STATE_DIR/hostd.log"

@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   engine:
-    if: github.ref_name != 'v1.0.0' && github.ref_name != 'v1.0.1' && github.ref_name != 'v1.0.2' && github.ref_name != 'v1.0.3' && github.ref_name != 'v1.0.4' && github.ref_name != 'v1.0.5'
+    if: github.ref_name != 'v1.0.0' && github.ref_name != 'v1.0.1' && github.ref_name != 'v1.0.2' && github.ref_name != 'v1.0.3' && github.ref_name != 'v1.0.4' && github.ref_name != 'v1.0.5' && github.ref_name != 'v1.0.6'
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,7 +51,7 @@ jobs:
           if-no-files-found: error
 
   package:
-    if: github.ref_name != 'v1.0.0' && github.ref_name != 'v1.0.1' && github.ref_name != 'v1.0.2' && github.ref_name != 'v1.0.3' && github.ref_name != 'v1.0.4' && github.ref_name != 'v1.0.5'
+    if: github.ref_name != 'v1.0.0' && github.ref_name != 'v1.0.1' && github.ref_name != 'v1.0.2' && github.ref_name != 'v1.0.3' && github.ref_name != 'v1.0.4' && github.ref_name != 'v1.0.5' && github.ref_name != 'v1.0.6'
     needs: engine
     runs-on: ubuntu-latest
     steps:

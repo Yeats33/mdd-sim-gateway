@@ -37,6 +37,13 @@ at build time and validates the final source-mounted configuration with the
 bundled `limactl`. The installed App has no runtime base-template locator or
 dependency on Homebrew's external Lima template directory.
 
+v1.0.6 preserves Lima's upstream `<prefix>/bin` and `<prefix>/share/lima`
+layout inside the App and bundles the matching Linux-aarch64 guest agent. The
+macOS smoke test validates its gzip stream and ELF header before accepting a DMG.
+The previous `Contents/Resources/limactl` entry point remains as an internal
+compatibility link so an already-running v1.0.5 helper survives an in-place App
+upgrade.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 

@@ -85,6 +85,7 @@ class MacHostService {
               _firstExisting([Directory.current.path]);
     final limactl = _firstExisting([
       Platform.environment['MDD_LIMA_BIN'],
+      path.join(resources, 'lima', 'bin', 'limactl'),
       path.join(resources, 'limactl'),
       '/opt/homebrew/bin/limactl',
       '/usr/local/bin/limactl',
@@ -93,7 +94,7 @@ class MacHostService {
       throw const FileSystemException('Mac 网关资源不完整。');
     }
     if (limactl == null) {
-      throw const FileSystemException('尚未安装 Lima；正式 DMG 会内置经校验的 limactl。');
+      throw const FileSystemException('尚未安装 Lima；正式 DMG 会内置完整、经校验的 Lima 运行时。');
     }
     final arguments = [
       '--state-dir',
@@ -130,9 +131,7 @@ class MacHostService {
       logSink.writeln('[spawn] $error');
       await logSink.flush();
       await logSink.close();
-      throw HttpException(
-        '无法启动 mdd-hostd：${error.message}。日志：${logFile.path}',
-      );
+      throw HttpException('无法启动 mdd-hostd：${error.message}。日志：${logFile.path}');
     }
     final stdoutDone = _process!.stdout
         .transform(utf8.decoder)
