@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sip_ua/sip_ua.dart';
 
 import '../../core/api/gateway_api.dart';
@@ -231,6 +232,16 @@ class _CallsPageState extends State<CallsPage> implements SipUaHelperListener {
   Future<void> _placeCall() async {
     final number = _number.text.trim();
     if (number.isEmpty || _dialing) return;
+    final microphone = await Permission.microphone.request();
+    if (!microphone.isGranted) {
+      if (mounted) _toast('需要麦克风权限才能拨打 VoWiFi 电话。');
+      return;
+    }
+    if (Platform.isAndroid) {
+      // Android 12+ protects Bluetooth headset routing separately. On older
+      // releases this permission reports granted without a user prompt.
+      await Permission.bluetoothConnect.request();
+    }
     setState(() => _dialing = true);
     try {
       final ok = await _sip.call(

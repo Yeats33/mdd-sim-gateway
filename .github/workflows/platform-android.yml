@@ -1,0 +1,34 @@
+name: Android native client
+
+on:
+  push:
+    branches: [platform/android]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Flutter SDK
+        run: |
+          git clone --depth 1 --branch 3.44.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          printf '%s\n' "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Analyze and test shared Dart code
+        working-directory: clients/mdd_gateway_app
+        run: |
+          flutter config --no-analytics
+          flutter pub get
+          dart analyze
+          flutter test
+      - name: Build Android arm64 release-mode acceptance artifact
+        working-directory: clients/mdd_gateway_app
+        run: |
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
+          apk=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          test -f "$apk"
+          abis=$(unzip -Z1 "$apk" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)
+          test "$abis" = arm64-v8a

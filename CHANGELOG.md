@@ -27,6 +27,11 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   export options and Apple credentials outside the repository and does not claim background
   incoming calls without the APNs/PushKit service that iOS requires.
 
+- The Android branch now declares its LAN, QR camera, microphone, and audio-routing needs,
+  disables cleartext traffic, and builds only `arm64-v8a`. Release builds require the owner's
+  persistent keystore, verify both the ABI set and APK signature, and never fall back to the
+  debug signing identity.
+
 ### Fixed
 
 - A paired client allowed the self-signed softphone WSS connection after checking only the
