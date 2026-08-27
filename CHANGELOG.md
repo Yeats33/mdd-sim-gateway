@@ -17,6 +17,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   branch will supervise the unchanged Linux/Docker telecom engine through a Rust host service
   instead of attempting to replace its mature IMS, Asterisk, and modem implementation.
 
+- The iOS branch defines the local-network, QR camera, microphone, and background-call audio
+  permissions for the native controller and provides a signing-aware IPA build path. It keeps
+  export options and Apple credentials outside the repository and does not claim background
+  incoming calls without the APNs/PushKit service that iOS requires.
+
+### Fixed
+
+- An operator save could retain the same coarse filesystem modification time as the previous
+  document and leave the orchestrator asleep for the full idle backoff. Input change detection
+  now uses nanosecond timestamps plus file size, so settings and line actions wake it reliably.
+
 ## [1.5.2] - 2026-08-26
 
 ### Fixed
