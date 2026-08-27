@@ -15,10 +15,16 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = HostConfig::parse().validated()?;
+    let validate_template_only = config.validate_template_only;
     config.ensure_state_dir()?;
     let token = config.load_or_create_token()?;
     let bind: SocketAddr = config.bind.parse().context("invalid --bind address")?;
     let supervisor = Arc::new(Supervisor::new(config, Arc::new(ProcessRunner)));
+    if validate_template_only {
+        supervisor.validate_template().await?;
+        info!("MDD Lima VM template validated");
+        return Ok(());
+    }
     let app = api::router(supervisor, token);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     info!(%bind, "MDD Mac host service listening");

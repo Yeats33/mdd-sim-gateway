@@ -90,6 +90,21 @@ impl Supervisor {
         })
     }
 
+    pub async fn validate_template(&self) -> Result<(), SupervisorError> {
+        let _guard = self.operation_lock.lock().await;
+        self.render_template()?;
+        self.run_lima(
+            "validate VM template",
+            vec![
+                "template".into(),
+                "validate".into(),
+                self.config.rendered_template().display().to_string(),
+            ],
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn start(&self) -> Result<OperationResult, SupervisorError> {
         let _guard = self.operation_lock.lock().await;
         self.ensure_created().await?;
@@ -213,7 +228,10 @@ impl Supervisor {
     fn render_template(&self) -> Result<(), SupervisorError> {
         let template = fs::read_to_string(self.config.lima_template())?;
         let source = yaml_string(self.config.source_dir());
-        let rendered = template.replace("__MDD_SOURCE__", &source);
+        let base = yaml_string(&self.config.lima_base_template());
+        let rendered = template
+            .replace("__MDD_SOURCE__", &source)
+            .replace("__MDD_BASE__", &base);
         fs::write(self.config.rendered_template(), rendered)?;
         Ok(())
     }
@@ -341,8 +359,10 @@ mod tests {
     fn config(root: &Path) -> HostConfig {
         let source = root.join("source with spaces");
         let template = root.join("template.yaml");
+        let base = root.join("mdd-base.yaml");
         fs::create_dir_all(&source).unwrap();
-        fs::write(&template, "mount: __MDD_SOURCE__\n").unwrap();
+        fs::write(&template, "base: __MDD_BASE__\nmount: __MDD_SOURCE__\n").unwrap();
+        fs::write(&base, "images: []\n").unwrap();
         HostConfig {
             bind: "127.0.0.1:48630".into(),
             state_dir: Some(root.join("state")),
@@ -351,6 +371,7 @@ mod tests {
             limactl: PathBuf::from("limactl-test"),
             vm_name: "mdd-test".into(),
             gateway_port: 8443,
+            validate_template_only: false,
         }
         .validated()
         .unwrap()
@@ -384,5 +405,31 @@ mod tests {
         let rendered = fs::read_to_string(config.rendered_template()).unwrap();
         assert!(rendered.contains("\""));
         assert!(rendered.contains("source with spaces"));
+        assert!(rendered.contains("mdd-base.yaml"));
+        assert!(!rendered.contains("__MDD_BASE__"));
+    }
+
+    #[tokio::test]
+    async fn validates_the_fully_rendered_vm_template() {
+        let root = tempfile::tempdir().unwrap();
+        let config = config(root.path());
+        config.ensure_state_dir().unwrap();
+        let runner = Arc::new(MockRunner::new(vec![output(0, "validated")]));
+        let supervisor = Supervisor::new(config.clone(), runner.clone());
+
+        supervisor.validate_template().await.unwrap();
+
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0][1], "template");
+        assert_eq!(calls[0][2], "validate");
+        assert_eq!(
+            calls[0][3],
+            config.rendered_template().display().to_string()
+        );
+        let rendered = fs::read_to_string(config.rendered_template()).unwrap();
+        assert!(rendered.contains("mdd-base.yaml"));
+        assert!(!rendered.contains("__MDD_SOURCE__"));
+        assert!(!rendered.contains("__MDD_BASE__"));
     }
 }

@@ -15,8 +15,9 @@ RESOURCES="$APP_DIR/Contents/Resources"
 HOSTD="$RESOURCES/mdd-hostd"
 SOURCE="$RESOURCES/gateway-source"
 TEMPLATE="$RESOURCES/mdd-vm.yaml"
+BASE_TEMPLATE="$RESOURCES/mdd-base.yaml"
 LIMACTL="$RESOURCES/limactl"
-for required in "$HOSTD" "$SOURCE" "$TEMPLATE" "$LIMACTL"; do
+for required in "$HOSTD" "$SOURCE" "$TEMPLATE" "$BASE_TEMPLATE" "$LIMACTL"; do
   [ -e "$required" ] || {
     echo "bundled host resource missing: $required" >&2
     exit 1
@@ -25,6 +26,20 @@ done
 
 STATE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/mdd-hostd-smoke.XXXXXX")
 LOG_FILE="$STATE_DIR/hostd.log"
+if ! "$HOSTD" \
+  --state-dir "$STATE_DIR/validate-state" \
+  --source-dir "$SOURCE" \
+  --lima-template "$TEMPLATE" \
+  --lima-bin "$LIMACTL" \
+  --validate-template-only \
+  >"$STATE_DIR/template-validation.log" 2>&1; then
+  echo "bundled Lima VM template validation failed" >&2
+  sed -n '1,200p' "$STATE_DIR/template-validation.log" >&2
+  rm -r "$STATE_DIR"
+  exit 1
+fi
+echo "Bundled self-contained Lima VM template passed validation."
+
 "$HOSTD" \
   --bind 127.0.0.1:48631 \
   --state-dir "$STATE_DIR/state" \

@@ -34,6 +34,9 @@ mkdir -p "$RESOURCES" "$SOURCE"
 install -m 0755 "$HOSTD_DIR/target/aarch64-apple-darwin/release/mdd-hostd" "$RESOURCES/mdd-hostd"
 install -m 0755 "$LIMACTL_BIN" "$RESOURCES/limactl"
 install -m 0644 "$HOSTD_DIR/templates/mdd-vm.yaml" "$RESOURCES/mdd-vm.yaml"
+"$LIMACTL_BIN" template copy --embed-all template:ubuntu-24.04 > "$RESOURCES/mdd-base.yaml"
+"$LIMACTL_BIN" template validate "$RESOURCES/mdd-base.yaml"
+chmod 0644 "$RESOURCES/mdd-base.yaml"
 
 for item in control engine host patches tools webui install.sh update-policy.json VERSION; do
   if [ -d "$REPO_DIR/$item" ]; then
