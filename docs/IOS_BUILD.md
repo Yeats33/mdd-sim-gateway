@@ -25,3 +25,9 @@ MDD_IOS_EXPORT_OPTIONS_PLIST=/secure/path/ExportOptions.plist \
 The export options file and signing credentials must remain outside the
 repository. TestFlight, Ad Hoc, and Development distribution can use the same
 script with the corresponding Xcode export method.
+
+For the unified GitHub Release, put the Apple-issued certificate and Ad Hoc
+profile files in the external signing directory described by
+`tools/configure-apple-release-signing.sh`. The tool verifies the bundle ID,
+registered-device profile, certificate/private-key match, and expiry before it
+creates the password-protected P12 and configures GitHub Actions secrets.

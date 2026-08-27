@@ -21,5 +21,10 @@ app, and stages the helper, VM template, Lima CLI, and public gateway source int
 the application bundle. Signing and notarization are separate release steps and
 require the owner's Developer ID credentials.
 
+`tools/configure-apple-release-signing.sh` validates that the Apple-issued
+Developer ID Application certificate matches the locally generated private key,
+creates the password-protected P12, validates the App Store Connect team key,
+and configures the GitHub Actions notarization secrets without printing them.
+
 The VM forwards only HTTPS management port 8443 and the bounded WebRTC WSS range
 8089-8139 to the LAN. It never exposes the Docker daemon or socket.
