@@ -23,7 +23,12 @@ pub struct HostConfig {
     #[arg(long, env = "MDD_LIMA_TEMPLATE", value_name = "FILE")]
     pub lima_template: Option<PathBuf>,
 
-    #[arg(long, env = "MDD_LIMA_BIN", default_value = "limactl")]
+    #[arg(
+        long = "lima-bin",
+        visible_alias = "limactl",
+        env = "MDD_LIMA_BIN",
+        default_value = "limactl"
+    )]
     pub limactl: PathBuf,
 
     #[arg(long, env = "MDD_VM_NAME", default_value = "mdd-sim-gateway")]
@@ -197,5 +202,17 @@ mod tests {
                 0o600
             );
         }
+    }
+
+    #[test]
+    fn accepts_canonical_and_legacy_lima_cli_options() {
+        let canonical =
+            HostConfig::try_parse_from(["mdd-hostd", "--lima-bin", "/tmp/canonical-limactl"])
+                .unwrap();
+        assert_eq!(canonical.limactl, PathBuf::from("/tmp/canonical-limactl"));
+
+        let legacy =
+            HostConfig::try_parse_from(["mdd-hostd", "--limactl", "/tmp/legacy-limactl"]).unwrap();
+        assert_eq!(legacy.limactl, PathBuf::from("/tmp/legacy-limactl"));
     }
 }

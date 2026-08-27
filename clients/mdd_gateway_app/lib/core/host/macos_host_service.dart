@@ -95,7 +95,7 @@ class MacHostService {
     if (limactl == null) {
       throw const FileSystemException('尚未安装 Lima；正式 DMG 会内置经校验的 limactl。');
     }
-    _process = await Process.start(hostd, [
+    final arguments = [
       '--state-dir',
       stateDir.path,
       '--source-dir',
@@ -104,17 +104,74 @@ class MacHostService {
       limaTemplate,
       '--lima-bin',
       limactl,
-    ], mode: ProcessStartMode.detachedWithStdio);
-    unawaited(_process!.stdout.drain<void>());
-    unawaited(_process!.stderr.drain<void>());
+    ];
+    final logFile = File(path.join(stateDir.path, 'hostd.log'));
+    final logSink = logFile.openWrite(mode: FileMode.writeOnlyAppend);
+    logSink.writeln(
+      '[${DateTime.now().toIso8601String()}] launching bundled mdd-hostd',
+    );
+    var startupTail = '';
+    void recordOutput(String stream, String chunk) {
+      final entry = '[$stream] $chunk';
+      logSink.write(entry);
+      startupTail += entry;
+      if (startupTail.length > 4000) {
+        startupTail = startupTail.substring(startupTail.length - 4000);
+      }
+    }
+
+    try {
+      _process = await Process.start(
+        hostd,
+        arguments,
+        mode: ProcessStartMode.normal,
+      );
+    } on ProcessException catch (error) {
+      logSink.writeln('[spawn] $error');
+      await logSink.flush();
+      await logSink.close();
+      throw HttpException(
+        '无法启动 mdd-hostd：${error.message}。日志：${logFile.path}',
+      );
+    }
+    final stdoutDone = _process!.stdout
+        .transform(utf8.decoder)
+        .forEach((chunk) => recordOutput('stdout', chunk));
+    final stderrDone = _process!.stderr
+        .transform(utf8.decoder)
+        .forEach((chunk) => recordOutput('stderr', chunk));
+    int? exitCode;
+    unawaited(
+      _process!.exitCode.then((value) async {
+        await Future.wait([stdoutDone, stderrDone]);
+        exitCode = value;
+        logSink.writeln('[exit] status=$value');
+        await logSink.flush();
+        await logSink.close();
+      }),
+    );
     for (var attempt = 0; attempt < 40; attempt++) {
       await Future<void>.delayed(const Duration(milliseconds: 250));
       if (await _healthy()) {
+        await logSink.flush();
         await _loadToken();
         return;
       }
+      if (exitCode != null) {
+        final detail = startupTail.trim();
+        throw HttpException(
+          'mdd-hostd 已提前退出（状态 $exitCode）。'
+          '${detail.isEmpty ? '' : ' $detail'} 日志：${logFile.path}',
+        );
+      }
     }
-    throw const HttpException('mdd-hostd 启动超时。');
+    _process!.kill(ProcessSignal.sigterm);
+    await logSink.flush();
+    final detail = startupTail.trim();
+    throw HttpException(
+      'mdd-hostd 启动超时。${detail.isEmpty ? '' : ' $detail'} '
+      '日志：${logFile.path}',
+    );
   }
 
   Future<MacHostStatus> status() async =>
