@@ -99,13 +99,14 @@ RUN set -eu; \
     make -j$(nproc) && \
     make install DOWNLOAD='curl --http1.1 -fL -O -C - --retry 5 --retry-all-errors --connect-timeout 15 --max-time 900 --speed-time 30 --speed-limit 1024'
 
-RUN python3 -m pip install --no-cache-dir panoramisk==1.4
+RUN PIP_ROOT_USER_ACTION=ignore python3 -m pip install --no-cache-dir panoramisk==1.4
 
 # SWu (python IKEv2/IPsec) tunnel dependencies. swu_ike.py is the ePDG tunnel: it needs
 # pycryptodome/cryptography (IKE + ESP crypto), pyserial (imported by the upstream emulator), and
 # mitshell's card helpers. AKA secrets stay inside the physical SIM/eSIM; the image does not
 # include a software Milenage implementation or accept Ki/OP/OPc.
-RUN python3 -m pip install --no-cache-dir pyserial==3.5 pycryptodome==3.23.0 cryptography==50.0.0 \
+RUN PIP_ROOT_USER_ACTION=ignore python3 -m pip install --no-cache-dir \
+    pyserial==3.5 pycryptodome==3.23.0 cryptography==50.0.0 \
     "git+https://github.com/mitshell/card.git@790a8fb0b8fbc0b06f568feba51aeef28352145e"
 
 # Derive the Fedora runtime package closure from the binary we just built and every Asterisk

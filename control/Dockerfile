@@ -43,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app/control
 COPY control/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt \
+RUN PIP_ROOT_USER_ACTION=ignore pip install --no-cache-dir -r requirements.txt \
     && apt-get purge -y swig gcc python3-dev pkg-config meson ninja-build flex \
     && apt-get autoremove -y
 
