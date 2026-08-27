@@ -176,7 +176,7 @@ class _CallsPageState extends State<CallsPage> implements SipUaHelperListener {
         _voicemails = _list(results[2], 'voicemails');
       });
       if (provisioning['enabled'] == true) {
-        _startSip(provisioning);
+        await _startSip(provisioning);
       } else {
         setState(() => _registration = '线路未启用软电话');
       }
@@ -185,7 +185,7 @@ class _CallsPageState extends State<CallsPage> implements SipUaHelperListener {
     }
   }
 
-  void _startSip(JsonMap provisioning) {
+  Future<void> _startSip(JsonMap provisioning) async {
     final host =
         provisioning['host']?.toString() ?? widget.state.endpoint?.host;
     final username = provisioning['username']?.toString();
@@ -197,6 +197,16 @@ class _CallsPageState extends State<CallsPage> implements SipUaHelperListener {
     }
     final domain = provisioning['domain']?.toString() ?? host;
     _domain = domain;
+    final trustedFingerprint = widget.state.certificateSha256;
+    if (trustedFingerprint != null) {
+      final observedFingerprint = await GatewayApi.inspectCertificate(
+        Uri(scheme: 'https', host: host, port: int.parse(port)),
+      );
+      if (observedFingerprint != trustedFingerprint) {
+        setState(() => _registration = '软电话证书与已配对网关不一致');
+        throw const GatewayApiException('拒绝连接：软电话 WSS 证书指纹不匹配。');
+      }
+    }
     final settings = UaSettings()
       ..transportType = TransportType.WS
       ..webSocketUrl = 'wss://$host:$port/ws'
@@ -211,10 +221,10 @@ class _CallsPageState extends State<CallsPage> implements SipUaHelperListener {
       ..sessionTimers = false
       ..dtmfMode = DtmfMode.RFC2833
       ..userAgent = 'MDD Sim Gateway Native';
-    // The WSS endpoint uses the installation certificate already confirmed on pairing.
-    // sip_ua currently supports self-signed WSS as a boolean rather than a fingerprint hook.
-    settings.webSocketSettings.allowBadCertificate =
-        widget.state.certificateSha256 != null;
+    // sip_ua exposes self-signed WSS as a boolean rather than a fingerprint
+    // callback. Enable it only after the preflight above proves the WSS endpoint
+    // presents the same certificate the user trusted for the gateway.
+    settings.webSocketSettings.allowBadCertificate = trustedFingerprint != null;
     setState(() => _registration = '连接中');
     _sip.start(settings);
   }
