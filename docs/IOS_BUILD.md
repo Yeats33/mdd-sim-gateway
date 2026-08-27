@@ -5,6 +5,8 @@ gateway. It requests only the local-network, camera, and microphone access used
 for pairing and VoWiFi calls. ATS allows local networking but the Dart client
 still requires HTTPS and explicit SHA-256 certificate confirmation.
 
+The deployment target is iOS 15, matching the supported floor of Flutter 3.44.
+
 An active call may continue audio in the background. Receiving a new call after
 iOS suspends or terminates the app requires an APNs/PushKit service and is not
 claimed by this LAN-only build; while the app is active, incoming calls use the
