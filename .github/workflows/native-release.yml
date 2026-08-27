@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
 
 env:
@@ -139,11 +140,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: native-*
-          path: release-assets
-          merge-multiple: true
+      - name: Download native artifacts without a JavaScript action runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release-assets
+          for artifact in native-android native-ios native-macos; do
+            gh run download "$GITHUB_RUN_ID" --name "$artifact" \
+              --dir release-assets --repo "$GITHUB_REPOSITORY"
+          done
       - name: Verify assets and checksums
         run: |
           set -eu

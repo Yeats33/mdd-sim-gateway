@@ -6,6 +6,7 @@ on:
       - 'v*'
 
 permissions:
+  actions: read
   contents: write
   packages: write
 
@@ -92,10 +93,10 @@ jobs:
           # The native ARM64 engine job performs the clean build and publishes it to GHCR.
           # Keep this cheap parser check here so packaging also rejects a malformed definition.
           docker build --check -f engine/Dockerfile engine
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: engine-image
-          path: .
+      - name: Download Engine artifact without a JavaScript action runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --name engine-image --dir . --repo "$GITHUB_REPOSITORY"
       - name: Build checksummed source archive
         run: |
           archive="mdd-sim-gateway-${GITHUB_REF_NAME}.tar.gz"
