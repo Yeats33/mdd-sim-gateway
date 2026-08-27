@@ -53,14 +53,31 @@ if [ -z "$APKSIGNER" ]; then
   echo "apksigner was not found; set MDD_APKSIGNER to the Android SDK tool" >&2
   exit 1
 fi
+OPENSSL=${MDD_OPENSSL:-$(command -v openssl || true)}
+if [ -z "$OPENSSL" ]; then
+  echo "openssl was not found; set MDD_OPENSSL to the OpenSSL binary" >&2
+  exit 1
+fi
 if "$APKSIGNER" verify "$SOURCE_APK" >/dev/null 2>&1; then
   echo "release source APK was unexpectedly pre-signed" >&2
   exit 1
 fi
+
+# Java providers on GitHub runners cannot consistently decrypt OpenSSL PBES2
+# keys. Keep the persisted PKCS#8 key encrypted, but convert it through a pipe
+# to an owner-only, unencrypted PKCS#8 DER file for this signing process only.
+UNENCRYPTED_PRIVATE_KEY=$(mktemp "${TMPDIR:-/tmp}/mdd-android-release-key.XXXXXX")
+trap 'rm -f -- "$UNENCRYPTED_PRIVATE_KEY"' EXIT HUP INT TERM
+"$OPENSSL" pkey -inform DER \
+  -in "$MDD_ANDROID_PRIVATE_KEY" \
+  -passin file:"$MDD_ANDROID_KEY_PASSWORD_FILE" \
+  -outform PEM | \
+  "$OPENSSL" pkcs8 -topk8 -nocrypt -outform DER -out "$UNENCRYPTED_PRIVATE_KEY"
+chmod 0600 "$UNENCRYPTED_PRIVATE_KEY"
+
 "$APKSIGNER" sign \
-  --key "$MDD_ANDROID_PRIVATE_KEY" \
+  --key "$UNENCRYPTED_PRIVATE_KEY" \
   --cert "$MDD_ANDROID_CERTIFICATE" \
-  --key-pass "file:$MDD_ANDROID_KEY_PASSWORD_FILE" \
   --v1-signing-enabled false \
   --v2-signing-enabled true \
   --v3-signing-enabled true \
@@ -68,6 +85,7 @@ fi
   --debuggable-apk-permitted false \
   --out "$OUTPUT_APK" \
   "$SOURCE_APK"
+chmod 0644 "$OUTPUT_APK"
 
 ABIS=$(unzip -Z1 "$OUTPUT_APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u)
 if [ "$ABIS" != "arm64-v8a" ]; then

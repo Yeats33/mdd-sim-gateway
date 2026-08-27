@@ -37,6 +37,23 @@ STAGING_DIR=$(mktemp -d "$CLIENT_DIR/build/ios/unsigned-ipa.XXXXXX")
 trap 'rm -r "$STAGING_DIR"' EXIT HUP INT TERM
 mkdir -p "$STAGING_DIR/Payload" "$DIST_DIR"
 ditto "$APP_DIR" "$STAGING_DIR/Payload/Runner.app"
+
+# Prebuilt Flutter plugin frameworks can retain vendor/ad-hoc signatures even
+# when Xcode builds the top-level app with CODE_SIGNING_ALLOWED=NO. Strip every
+# executable signature from the disposable Payload copy so the IPA has one
+# unambiguous state and can be re-signed by the recipient.
+find "$STAGING_DIR/Payload" -type f -perm -111 \
+  -exec codesign --remove-signature {} \; 2>/dev/null || true
+find "$STAGING_DIR/Payload" -type d -name _CodeSignature -prune \
+  -exec rm -r {} \;
+find "$STAGING_DIR/Payload" -type f -name embedded.mobileprovision -delete
+
+if find "$STAGING_DIR/Payload" -type f -perm -111 \
+  -exec sh -c 'for candidate in "$@"; do codesign --verify "$candidate" >/dev/null 2>&1 && exit 0; done; exit 1' sh {} +; then
+  echo "unsigned IPA payload still contains signed executable code" >&2
+  exit 1
+fi
+
 OUTPUT_IPA="$DIST_DIR/mdd-sim-gateway-${VERSION}-ios-unsigned.ipa"
 (cd "$STAGING_DIR" && ditto -c -k --sequesterRsrc --keepParent Payload "$OUTPUT_IPA")
 
