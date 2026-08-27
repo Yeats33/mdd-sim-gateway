@@ -1,9 +1,8 @@
 use std::{fs, path::Path, sync::Arc};
 
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::{net::TcpStream, sync::Mutex};
 
 use crate::{config::HostConfig, process::CommandRunner};
 
@@ -185,22 +184,12 @@ impl Supervisor {
     }
 
     async fn gateway_ready(&self) -> bool {
-        let url = format!(
-            "https://127.0.0.1:{}/api/auth/status",
-            self.config.gateway_port
-        );
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(3))
-            .build();
-        match client {
-            Ok(client) => client
-                .get(url)
-                .send()
-                .await
-                .is_ok_and(|response| response.status().is_success()),
-            Err(_) => false,
-        }
+        tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, self.config.gateway_port)),
+        )
+        .await
+        .is_ok_and(|result| result.is_ok())
     }
 
     async fn ensure_created(&self) -> Result<(), SupervisorError> {
@@ -293,20 +282,6 @@ fn yaml_string(path: &Path) -> String {
             .replace('"', "\\\"")
             .replace('\n', "")
     )
-}
-
-pub fn fingerprint_pem(pem: &str) -> Option<String> {
-    let body: String = pem
-        .lines()
-        .filter(|line| !line.starts_with("-----"))
-        .collect();
-    let decoded = decode_base64(&body)?;
-    Some(hex::encode(Sha256::digest(decoded)))
-}
-
-fn decode_base64(value: &str) -> Option<Vec<u8>> {
-    use base64ct::{Base64, Encoding};
-    Base64::decode_vec(value).ok()
 }
 
 #[cfg(test)]
@@ -409,10 +384,5 @@ mod tests {
         let rendered = fs::read_to_string(config.rendered_template()).unwrap();
         assert!(rendered.contains("\""));
         assert!(rendered.contains("source with spaces"));
-    }
-
-    #[test]
-    fn rejects_malformed_certificate_pem() {
-        assert_eq!(fingerprint_pem("not a certificate"), None);
     }
 }
