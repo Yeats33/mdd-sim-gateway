@@ -12,22 +12,19 @@ iOS suspends or terminates the app requires an APNs/PushKit service and is not
 claimed by this LAN-only build; while the app is active, incoming calls use the
 gateway's existing WSS softphone path.
 
-## Build an IPA
+## Build the unsigned IPA
 
-An installable IPA cannot be produced without the owner's Apple Developer
-identity and provisioning profile. On a signing Mac:
+On an Apple Silicon Mac with Xcode and Flutter:
 
 ```sh
-MDD_IOS_EXPORT_OPTIONS_PLIST=/secure/path/ExportOptions.plist \
-  ./tools/build-ios-ipa.sh
+./tools/build-ios-ipa.sh
 ```
 
-The export options file and signing credentials must remain outside the
-repository. TestFlight, Ad Hoc, and Development distribution can use the same
-script with the corresponding Xcode export method.
+The script compiles with `--no-codesign`, rejects embedded signatures and
+provisioning profiles, verifies the bundle identifier, and creates a standard
+`Payload/Runner.app` IPA. The resulting IPA requires a jailbroken device or
+re-signing with AltStore, Sideloadly, or the user's own Apple identity; it does
+not install directly on a stock iPhone.
 
-For the unified GitHub Release, put the Apple-issued certificate and Ad Hoc
-profile files in the external signing directory described by
-`tools/configure-apple-release-signing.sh`. The tool verifies the bundle ID,
-registered-device profile, certificate/private-key match, and expiry before it
-creates the password-protected P12 and configures GitHub Actions secrets.
+`tools/configure-apple-release-signing.sh` remains available for an optional
+future Apple-signed distribution.

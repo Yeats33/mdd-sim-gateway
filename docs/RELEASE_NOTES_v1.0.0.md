@@ -7,8 +7,10 @@
   国家出口、通知、备份、更新和诊断。
 - 首次配对核对 HTTPS SHA-256 指纹；软电话 WSS 必须提供同一证书。
 - Android APK 仅包含 `arm64-v8a`，使用本项目独立长期发布证书签名。
-- IPA 使用 Apple Distribution 和匹配的 Provisioning Profile 签名。
-- DMG 使用 Developer ID 签名、Hardened Runtime、公证并附加公证票据。
+- IPA 未签名，供越狱设备使用，或由 AltStore、Sideloadly、开发者自己的 Apple 身份二次签名；
+  它不能直接安装到普通未越狱 iPhone。
+- DMG 内的 App 使用 ad-hoc 签名，未经过 Apple 公证；首次打开时 macOS Gatekeeper 可能要求
+  用户在“隐私与安全性”中明确批准。
 
 首次连接真实读卡器或蜂窝模块前，请在可信局域网中完成管理员设置，并遵守号码实名、
 运营商协议和当地法律。Mac 物理硬件兼容性仍取决于实际读卡器、模块和 USB 桥接路径。
@@ -24,8 +26,10 @@ gateway over the local network.
   and diagnostics.
 - Pairing confirms the HTTPS SHA-256 fingerprint, and softphone WSS must present the same cert.
 - The Android APK contains only `arm64-v8a` and uses this project's dedicated long-term key.
-- The IPA is signed with Apple Distribution and its matching provisioning profile.
-- The DMG is Developer ID signed, hardened, notarized, and stapled.
+- The IPA is unsigned. It is intended for jailbroken devices or re-signing with AltStore,
+  Sideloadly, or the user's own Apple identity; it cannot be installed directly on a stock iPhone.
+- The app inside the DMG is ad-hoc signed and is not notarized by Apple. Gatekeeper may require
+  explicit approval in Privacy & Security on first launch.
 
 Configure the administrator only on a trusted LAN. Use the gateway solely for lines you own and
 where permitted by carrier terms and local law. Physical Mac hardware support still depends on
