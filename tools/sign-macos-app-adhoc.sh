@@ -18,6 +18,7 @@ fi
 if [ -z "$ENTITLEMENTS" ] || [ ! -f "$ENTITLEMENTS" ]; then
   fail "entitlements file not found: ${ENTITLEMENTS:-<missing>}"
 fi
+command -v python3 >/dev/null 2>&1 || fail "python3 is required to audit entitlements"
 
 is_mach_o() {
   /usr/bin/file -b "$1" 2>/dev/null | grep -q 'Mach-O'
@@ -64,12 +65,21 @@ assert_adhoc() {
 }
 
 assert_library_validation_exception() {
-  if ! value=$(codesign --display --entitlements - --xml "$APP_DIR" 2>/dev/null | \
-    /usr/bin/plutil -extract com.apple.security.cs.disable-library-validation raw -o - -); then
+  if ! entitlements_xml=$(codesign --display --entitlements - --xml "$APP_DIR" 2>/dev/null); then
     fail "cannot extract the final app entitlements"
+  fi
+  if ! value=$(printf '%s' "$entitlements_xml" | python3 -c '
+import plistlib
+import sys
+
+entitlements = plistlib.loads(sys.stdin.buffer.read())
+print("true" if entitlements.get("com.apple.security.cs.disable-library-validation") is True else "false")
+'); then
+    fail "cannot parse the final app entitlements"
   fi
   [ "$value" = true ] || \
     fail "final app signature does not disable library validation"
+  printf '%s\n' "$entitlements_xml"
 }
 
 audit_mach_o_files() {
@@ -91,8 +101,8 @@ audit_nested_bundles() {
 # every bundled framework must have the same empty Team ID as the ad-hoc host.
 sign_mach_o_files
 sign_nested_bundles
-codesign --force --options runtime --timestamp=none \
-  --entitlements "$ENTITLEMENTS" --sign - "$APP_DIR"
+codesign --force --sign - --options runtime --timestamp=none \
+  --entitlements "$ENTITLEMENTS" "$APP_DIR"
 
 codesign --verify --deep --strict --verbose=4 "$APP_DIR"
 audit_mach_o_files
