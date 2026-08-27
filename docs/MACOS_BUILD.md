@@ -21,6 +21,12 @@ app, and stages the helper, VM template, Lima CLI, and public gateway source int
 the application bundle. The v1.0.0 Release applies an ad-hoc signature and does
 not use Apple notarization, so Gatekeeper may require explicit user approval.
 
+Starting with v1.0.1, `tools/sign-macos-app-adhoc.sh` explicitly re-signs every
+nested Mach-O and code bundle from the deepest component outward before signing
+the host app. It then rejects any component that retains a third-party Team ID.
+`tools/smoke-macos-app.sh` launches the packaged executable for five seconds on
+the Apple Silicon CI runner to catch `dyld` and Library Validation failures.
+
 `tools/configure-apple-release-signing.sh` remains available for an optional
 future Developer ID signed and notarized distribution.
 
